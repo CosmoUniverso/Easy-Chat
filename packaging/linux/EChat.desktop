@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=EChat
+Comment=Offline-first encrypted messenger
+Exec=EChat
+Icon=echat
+Categories=Network;InstantMessaging;
+Terminal=false

@@ -1,0 +1,23 @@
+# CMake/build output
+build/
+build-*/
+out/
+dist/
+release-assets/
+AppDir/
+
+# IDE/editor
+.vscode/
+.idea/
+*.user
+*.swp
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Local runtime data
+*.db
+*.sqlite
+*.sqlite3

@@ -1,0 +1,156 @@
+name: Build and Release EChat
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  windows:
+    name: Windows x64 installer
+    runs-on: windows-2025
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Qt 6.8.3
+        uses: jurplel/install-qt-action@v4
+        with:
+          version: '6.8.3'
+          arch: 'win64_msvc2022_64'
+          modules: 'qtconnectivity'
+          cache: true
+
+      - name: Configure
+        shell: pwsh
+        run: |
+          cmake -S . -B build -G Ninja `
+            -DCMAKE_BUILD_TYPE=Release `
+            -DCMAKE_TOOLCHAIN_FILE="$env:VCPKG_INSTALLATION_ROOT/scripts/buildsystems/vcpkg.cmake" `
+            -DVCPKG_TARGET_TRIPLET=x64-windows
+
+      - name: Build
+        run: cmake --build build --config Release
+
+      - name: Stage application
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force dist/EChat | Out-Null
+          Copy-Item build/EChat.exe dist/EChat/
+          Copy-Item build/echat-cli.exe dist/EChat/
+          windeployqt --release --compiler-runtime --no-translations dist/EChat/EChat.exe
+          Get-ChildItem -Recurse build/vcpkg_installed/x64-windows/bin -Filter "*sodium*.dll" | ForEach-Object { Copy-Item $_.FullName dist/EChat/ -Force }
+
+      - name: Build one-file Windows installer
+        shell: pwsh
+        run: |
+          choco install nsis -y --no-progress
+          & "C:\\Program Files (x86)\\NSIS\\makensis.exe" packaging/windows/EChat.nsi
+          New-Item -ItemType Directory -Force release-assets | Out-Null
+          Move-Item packaging/windows/EChat-Windows-x64-Setup.exe release-assets/EChat-Windows-x64-Setup.exe
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: EChat-Windows-x64
+          path: release-assets/EChat-Windows-x64-Setup.exe
+          if-no-files-found: error
+
+  linux:
+    name: Linux x86_64 AppImage
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ninja-build pkg-config libsodium-dev libgl1-mesa-dev libxkbcommon-x11-0 libxcb-cursor0 libfuse2 wget file patchelf
+
+      - name: Install Qt 6.8.3
+        uses: jurplel/install-qt-action@v4
+        with:
+          version: '6.8.3'
+          arch: 'linux_gcc_64'
+          modules: 'qtconnectivity'
+          cache: true
+
+      - name: Configure and build
+        run: |
+          cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
+          cmake --build build
+
+      - name: Build one-file AppImage
+        env:
+          APPIMAGE_EXTRACT_AND_RUN: '1'
+        run: |
+          mkdir -p tools release-assets
+          wget -q -O tools/linuxdeploy-x86_64.AppImage https://github.com/linuxdeploy/linuxdeploy/releases/download/continuous/linuxdeploy-x86_64.AppImage
+          wget -q -O tools/linuxdeploy-plugin-qt-x86_64.AppImage https://github.com/linuxdeploy/linuxdeploy-plugin-qt/releases/download/continuous/linuxdeploy-plugin-qt-x86_64.AppImage
+          chmod +x tools/*.AppImage
+          export PATH="$PWD/tools:$PATH"
+          export QMAKE="$(command -v qmake6 || command -v qmake)"
+          tools/linuxdeploy-x86_64.AppImage \
+            --appdir AppDir \
+            --executable build/EChat \
+            --executable build/echat-cli \
+            --desktop-file packaging/linux/EChat.desktop \
+            --icon-file packaging/linux/echat.svg \
+            --plugin qt \
+            --output appimage
+          APPIMAGE="$(find . -maxdepth 1 -type f -name '*.AppImage' | head -n 1)"
+          test -n "$APPIMAGE"
+          mv "$APPIMAGE" release-assets/EChat-Linux-x86_64.AppImage
+          chmod +x release-assets/EChat-Linux-x86_64.AppImage
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: EChat-Linux-x86_64
+          path: release-assets/EChat-Linux-x86_64.AppImage
+          if-no-files-found: error
+          compression-level: 0
+
+  release:
+    name: Publish GitHub release
+    runs-on: ubuntu-24.04
+    needs: [windows, linux]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Read version
+        id: version
+        shell: bash
+        run: |
+          VERSION=$(sed -n 's/.*project(EChat VERSION \([0-9.]*\).*/\1/p' CMakeLists.txt | head -n1)
+          test -n "$VERSION"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "tag=v$VERSION" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/download-artifact@v4
+        with:
+          path: release-assets
+          merge-multiple: true
+
+      - name: Publish release
+        uses: softprops/action-gh-release@v3
+        with:
+          tag_name: ${{ steps.version.outputs.tag }}
+          target_commitish: ${{ github.sha }}
+          name: EChat ${{ steps.version.outputs.version }}
+          body: |
+            EChat ${{ steps.version.outputs.version }} pre-alpha.
+
+            Ready-to-run downloads:
+            - Windows 10/11 x64: `EChat-Windows-x64-Setup.exe`
+            - Linux/Fedora x86_64: `EChat-Linux-x86_64.AppImage`
+
+            The console client is experimental and is bundled with both packages.
+            Cryptography is still under development and this version is not yet recommended for high-risk communications.
+          prerelease: true
+          make_latest: false
+          overwrite_files: true
+          fail_on_unmatched_files: true
+          files: |
+            release-assets/EChat-Windows-x64-Setup.exe
+            release-assets/EChat-Linux-x86_64.AppImage
