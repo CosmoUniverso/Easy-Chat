@@ -37,6 +37,9 @@ struct PeerConnectivity {
     bool lanReachable = false;
     bool internetCapable = false;
     bool internetReachable = false;
+    bool meshCapable = false;
+    bool quicCapable = false;
+    bool tcpFallbackCapable = false;
     QDateTime bluetoothLastSeen;
     QDateTime lanLastSeen;
     QDateTime internetLastSeen;

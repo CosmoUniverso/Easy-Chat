@@ -28,6 +28,21 @@ jobs:
           modules: 'qtconnectivity'
           cache: true
 
+      - name: Install MsQuic 2.6.1
+        shell: pwsh
+        run: |
+          $url = "https://www.nuget.org/api/v2/package/Microsoft.Native.Quic.MsQuic.Schannel/2.6.1"
+          Invoke-WebRequest -Uri $url -OutFile msquic.nupkg
+          Copy-Item msquic.nupkg msquic.zip
+          Expand-Archive -Path msquic.zip -DestinationPath msquic-package -Force
+          $header = Get-ChildItem msquic-package -Recurse -Filter msquic.h | Select-Object -First 1
+          $lib = Get-ChildItem msquic-package -Recurse -Filter msquic.lib | Where-Object { $_.FullName -match 'x64' } | Select-Object -First 1
+          $dll = Get-ChildItem msquic-package -Recurse -Filter msquic.dll | Where-Object { $_.FullName -match 'x64' } | Select-Object -First 1
+          if (-not $header -or -not $lib -or -not $dll) { throw "MsQuic NuGet layout not recognized" }
+          "MSQUIC_INCLUDE_DIR=$($header.DirectoryName)" | Out-File -FilePath $env:GITHUB_ENV -Append
+          "MSQUIC_LIBRARY=$($lib.FullName)" | Out-File -FilePath $env:GITHUB_ENV -Append
+          "MSQUIC_DLL=$($dll.FullName)" | Out-File -FilePath $env:GITHUB_ENV -Append
+
       - name: Configure
         shell: pwsh
         run: |
@@ -35,7 +50,10 @@ jobs:
             -DCMAKE_BUILD_TYPE=Release `
             -DCMAKE_CXX_COMPILER=cl `
             -DCMAKE_TOOLCHAIN_FILE="$env:VCPKG_INSTALLATION_ROOT/scripts/buildsystems/vcpkg.cmake" `
-            -DVCPKG_TARGET_TRIPLET=x64-windows
+            -DVCPKG_TARGET_TRIPLET=x64-windows `
+            -DECHAT_BUILD_TESTS=ON `
+            -DMSQUIC_INCLUDE_DIR="$env:MSQUIC_INCLUDE_DIR" `
+            -DMSQUIC_LIBRARY="$env:MSQUIC_LIBRARY"
 
       - name: Build
         run: cmake --build build --config Release
@@ -48,6 +66,7 @@ jobs:
           Copy-Item build/echat-cli.exe dist/EChat/
           windeployqt --release --compiler-runtime --no-translations dist/EChat/EChat.exe
           Get-ChildItem -Recurse build/vcpkg_installed/x64-windows/bin -Filter "*sodium*.dll" | ForEach-Object { Copy-Item $_.FullName dist/EChat/ -Force }
+          Copy-Item "$env:MSQUIC_DLL" dist/EChat/msquic.dll -Force
 
       - name: Build one-file Windows installer
         shell: pwsh
@@ -74,7 +93,12 @@ jobs:
       - name: Install system dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y ninja-build pkg-config libsodium-dev libgl1-mesa-dev libxkbcommon-x11-0 libxcb-cursor0 libfuse2 wget file patchelf
+          sudo apt-get install -y ninja-build pkg-config libsodium-dev libgl1-mesa-dev libxkbcommon-x11-0 libxcb-cursor0 libfuse2 wget file patchelf openssl
+          wget -q https://packages.microsoft.com/config/ubuntu/24.04/packages-microsoft-prod.deb -O packages-microsoft-prod.deb
+          sudo dpkg -i packages-microsoft-prod.deb
+          rm packages-microsoft-prod.deb
+          sudo apt-get update
+          sudo apt-get install -y libmsquic=2.6.1
 
       - name: Install Qt 6.8.3
         uses: jurplel/install-qt-action@v4
@@ -86,8 +110,9 @@ jobs:
 
       - name: Configure and build
         run: |
-          cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
+          cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DECHAT_BUILD_TESTS=ON
           cmake --build build
+          ./build/EChatCryptoSelfTest
 
       - name: Build one-file AppImage
         env:
@@ -155,12 +180,19 @@ jobs:
           body: |
             EChat ${{ steps.version.outputs.version }} pre-alpha.
 
+            0.3 adds:
+            - Bluetooth Classic/RFCOMM direct messaging
+            - LAN discovery over UDP
+            - MsQuic 2.6.1 as the preferred LAN data channel
+            - TCP LAN fallback when QUIC is unavailable
+            - signed multi-hop P2P relay for direct chats and group fan-out
+
             Ready-to-run downloads:
             - Windows 10/11 x64: `EChat-Windows-x64-Setup.exe`
             - Linux/Fedora x86_64: `EChat-Linux-x86_64.AppImage`
 
             The console client is experimental and is bundled with both packages.
-            Cryptography is still under development and this version is not yet recommended for high-risk communications.
+            Mesh/LAN in 0.3 is pre-alpha and needs multi-device validation. Crypto v2 is not a Double Ratchet and is not recommended for high-risk communications.
           prerelease: true
           make_latest: false
           overwrite_files: true

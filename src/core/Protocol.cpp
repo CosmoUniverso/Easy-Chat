@@ -1,9 +1,16 @@
 #include "core/Protocol.h"
 
 #include <QDataStream>
+#include <QDateTime>
 #include <QJsonDocument>
+#include <QUuid>
 #include <QIODevice>
+#include <QtGlobal>
 #include <sodium.h>
+
+#ifndef ECHAT_HAVE_MSQUIC
+#define ECHAT_HAVE_MSQUIC 0
+#endif
 
 namespace ec::protocol {
 namespace {
@@ -22,7 +29,7 @@ QByteArray helloMaterial(const QString &userId,
                          const QByteArray &signingPublicKey,
                          const QByteArray &kxPublicKey,
                          const QJsonObject &caps) {
-    QByteArray out("ECHello-v2");
+    QByteArray out("ECHello-v3");
     appendField(out, QByteArray::number(ProtocolVersion));
     appendField(out, userId.toUtf8());
     appendField(out, username.toUtf8());
@@ -34,14 +41,31 @@ QByteArray helloMaterial(const QString &userId,
     capabilityBits.append(caps.value("internet").toBool() ? '1' : '0');
     capabilityBits.append(caps.value("groups").toBool() ? '1' : '0');
     capabilityBits.append(caps.value("files").toBool() ? '1' : '0');
+    capabilityBits.append(caps.value("mesh").toBool() ? '1' : '0');
+    capabilityBits.append(caps.value("quic").toBool() ? '1' : '0');
+    capabilityBits.append(caps.value("tcpFallback").toBool() ? '1' : '0');
     appendField(out, capabilityBits);
     return out;
 }
 
 QByteArray ackMaterial(const QString &messageId, const QString &senderId) {
-    QByteArray out("ECAck-v2");
+    QByteArray out("ECAck-v3");
     appendField(out, messageId.toUtf8());
     appendField(out, senderId.toUtf8());
+    return out;
+}
+
+QByteArray relayMaterial(const QString &packetId, const QString &originId,
+                         const QString &targetId, qint64 createdAtMs, int maxHops,
+                         int policy, const QByteArray &innerPayload) {
+    QByteArray out("ECRelay-v3");
+    appendField(out, packetId.toUtf8());
+    appendField(out, originId.toUtf8());
+    appendField(out, targetId.toUtf8());
+    appendField(out, QByteArray::number(createdAtMs));
+    appendField(out, QByteArray::number(maxHops));
+    appendField(out, QByteArray::number(policy));
+    appendField(out, innerPayload);
     return out;
 }
 
@@ -81,10 +105,13 @@ QList<QJsonObject> consume(QByteArray &buffer) {
 QJsonObject hello(const LocalIdentity &identity) {
     const QJsonObject caps{
         {"bluetooth", true},
-        {"lan", false},
+        {"lan", true},
         {"internet", false},
         {"groups", true},
-        {"files", false}
+        {"files", false},
+        {"mesh", true},
+        {"quic", ECHAT_HAVE_MSQUIC != 0},
+        {"tcpFallback", true}
     };
     const QByteArray material = helloMaterial(identity.userId, identity.username,
                                               identity.signingPublicKey, identity.kxPublicKey, caps);
@@ -165,6 +192,68 @@ bool verifyAck(const QJsonObject &object, const QByteArray &signingPublicKey) {
         reinterpret_cast<const unsigned char *>(material.constData()),
         static_cast<unsigned long long>(material.size()),
         reinterpret_cast<const unsigned char *>(signingPublicKey.constData())) == 0;
+}
+
+
+QJsonObject relay(const LocalIdentity &identity, const QString &targetId,
+                  const QJsonObject &inner, TransportPolicy policy, int ttl) {
+    const int maxHops = qBound(1, ttl, 8);
+    const QString packetId = QUuid::createUuid().toString(QUuid::WithoutBraces);
+    const qint64 createdAtMs = QDateTime::currentMSecsSinceEpoch();
+    const QByteArray innerPayload = QJsonDocument(inner).toJson(QJsonDocument::Compact);
+    const QByteArray material = relayMaterial(packetId, identity.userId, targetId, createdAtMs,
+                                              maxHops, static_cast<int>(policy), innerPayload);
+    QByteArray signature(crypto_sign_BYTES, Qt::Uninitialized);
+    crypto_sign_detached(reinterpret_cast<unsigned char *>(signature.data()), nullptr,
+                         reinterpret_cast<const unsigned char *>(material.constData()),
+                         static_cast<unsigned long long>(material.size()),
+                         reinterpret_cast<const unsigned char *>(identity.signingSecretKey.constData()));
+    return {
+        {"type", "relay"},
+        {"packetId", packetId},
+        {"originId", identity.userId},
+        {"targetId", targetId},
+        {"createdAtMs", static_cast<double>(createdAtMs)},
+        {"maxHops", maxHops},
+        {"ttl", maxHops},
+        {"policy", static_cast<int>(policy)},
+        {"originHello", hello(identity)},
+        {"innerPayload", QString::fromLatin1(innerPayload.toBase64())},
+        {"signature", QString::fromLatin1(signature.toBase64())}
+    };
+}
+
+bool verifyRelay(const QJsonObject &object, QJsonObject *inner) {
+    if (object.value("type").toString() != QStringLiteral("relay")) return false;
+    const QString packetId = object.value("packetId").toString();
+    const QString originId = object.value("originId").toString();
+    const QString targetId = object.value("targetId").toString();
+    const qint64 createdAtMs = static_cast<qint64>(object.value("createdAtMs").toDouble());
+    const int maxHops = object.value("maxHops").toInt(-1);
+    const int ttl = object.value("ttl").toInt(-1);
+    const int policy = object.value("policy").toInt(-1);
+    const QJsonObject originHello = object.value("originHello").toObject();
+    const QByteArray payload = QByteArray::fromBase64(object.value("innerPayload").toString().toLatin1());
+    const QByteArray signature = QByteArray::fromBase64(object.value("signature").toString().toLatin1());
+    if (packetId.isEmpty() || originId.isEmpty() || targetId.isEmpty() || createdAtMs <= 0 ||
+        maxHops < 1 || maxHops > 8 || ttl < 0 || ttl > maxHops ||
+        policy < static_cast<int>(TransportPolicy::Auto) ||
+        policy > static_cast<int>(TransportPolicy::PreferInternet) ||
+        payload.isEmpty() || signature.size() != crypto_sign_BYTES) return false;
+    if (originHello.value("userId").toString() != originId || !verifyHello(originHello)) return false;
+    const QByteArray signPk = QByteArray::fromBase64(originHello.value("signingPublicKey").toString().toLatin1());
+    const QByteArray material = relayMaterial(packetId, originId, targetId, createdAtMs, maxHops, policy, payload);
+    if (crypto_sign_verify_detached(
+            reinterpret_cast<const unsigned char *>(signature.constData()),
+            reinterpret_cast<const unsigned char *>(material.constData()),
+            static_cast<unsigned long long>(material.size()),
+            reinterpret_cast<const unsigned char *>(signPk.constData())) != 0) return false;
+
+    QJsonParseError error;
+    const auto doc = QJsonDocument::fromJson(payload, &error);
+    if (error.error != QJsonParseError::NoError || !doc.isObject()) return false;
+    if (inner) *inner = doc.object();
+    return true;
 }
 
 } // namespace ec::protocol

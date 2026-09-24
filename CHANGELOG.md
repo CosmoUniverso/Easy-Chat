@@ -1,5 +1,23 @@
 # Changelog
 
+## 0.3.0
+
+- Bumped wire protocol to **v3**.
+- Added LAN discovery over UDP broadcast.
+- Added preferred LAN transport using **Microsoft MsQuic 2.6.1**.
+- Added automatic **TCP LAN fallback** when QUIC is unavailable/not connected.
+- Added per-link route descriptions, including QUIC RTT when available.
+- Added signed P2P relay envelopes with packet ID, final destination, transport policy and bounded hop count.
+- Added multi-hop relay for both direct chats and group fan-out.
+- Added duplicate suppression to prevent relay loops.
+- Added signed identity propagation through the mesh so peers can learn the public identity/key of a non-direct destination.
+- Relay nodes forward the final recipient's encrypted message envelope without decrypting message text.
+- Separated QUIC and TCP receive-buffer keys so simultaneous LAN channels cannot corrupt application framing.
+- Added mesh relay signature/tamper checks to the self-test.
+- Windows CI now packages the official MsQuic Schannel native DLL.
+- Linux CI installs MsQuic 2.6.1 and includes it in AppImage dependency deployment.
+- BLE/GATT discovery, Internet relay/WSS, persistent delay-tolerant store-and-forward, file transfer and full path-cost routing remain future work.
+
 ## 0.2.0
 
 - Renamed product surface to **EChat — Easy Chat**.
@@ -18,10 +36,4 @@
 - Made route availability require peer capability + local availability + actual peer reachability.
 - Added experimental `echat-cli` sharing the exact same core/database/crypto/transports as the GUI.
 - Added optional crypto self-test target.
-
-## Packaging / CI
-
-- Added GitHub Actions builds for Windows x64 and Linux x86_64.
-- Added single-file Windows NSIS installer.
-- Added Linux AppImage packaging.
-- Added automatic GitHub prerelease publication for the CMake project version.
+- Added GitHub Actions builds, NSIS Windows installer, Linux AppImage and automatic prerelease publication.

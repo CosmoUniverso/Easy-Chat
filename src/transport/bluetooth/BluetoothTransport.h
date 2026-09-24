@@ -23,6 +23,7 @@ public:
     void start() override;
     void stop() override;
     bool sendFrame(const Peer &peer, const QByteArray &frame) override;
+    QString linkDescription(const Peer &) const override { return QStringLiteral("Bluetooth/RFCOMM"); }
 
     void setIdentity(const LocalIdentity &identity);
     void scan();

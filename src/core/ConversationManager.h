@@ -1,10 +1,11 @@
 #pragma once
 
-#include <QList>
-#include "core/Types.h"
 #include <QHash>
 #include <QJsonObject>
+#include <QList>
 #include <QObject>
+#include <QTimer>
+#include "core/Types.h"
 
 namespace ec {
 class CryptoEngine;
@@ -27,6 +28,8 @@ public:
     QString createGroup(const QString &name, const QStringList &peerIds);
     bool sendMessage(const QString &conversationId, const QString &text,
                      TransportPolicy policy = TransportPolicy::Auto);
+    bool relayPossible(const QString &targetPeerId,
+                       TransportPolicy policy = TransportPolicy::Auto) const;
 
 signals:
     void conversationUpdated(const ec::Conversation &conversation);
@@ -39,6 +42,15 @@ private:
     void onBytes(TransportType type, const QString &transportPeerKey, const QByteArray &bytes);
     void handleObject(TransportType type, const QString &transportPeerKey, const QJsonObject &object);
 
+    bool sendObjectToPeer(const Peer &peer, const QJsonObject &object, TransportPolicy policy,
+                          QString *routeDescription = nullptr);
+    bool floodRelay(QJsonObject relay, TransportPolicy policy, const QString &excludePeerId = {});
+    void handleRelay(TransportType type, const QString &transportPeerKey, const QJsonObject &object);
+    void handleMeshAnnounce(TransportType type, const QString &transportPeerKey, const QJsonObject &object);
+    void broadcastIdentity();
+    bool markPacketSeen(const QString &packetId);
+    void cleanupSeenPackets();
+
     Database &db_;
     CryptoEngine &crypto_;
     PeerManager &peers_;
@@ -46,6 +58,8 @@ private:
     LocalIdentity identity_;
     QHash<QString, Conversation> conversations_;
     QHash<QString, QByteArray> receiveBuffers_;
+    QHash<QString, qint64> seenPackets_;
+    QTimer meshAnnounceTimer_;
 };
 
 } // namespace ec

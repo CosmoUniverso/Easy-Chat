@@ -62,11 +62,12 @@ QList<TransportType> TransportManager::candidates(const Peer &peer, TransportPol
 }
 
 bool TransportManager::send(const Peer &peer, const QByteArray &bytes, TransportPolicy policy,
-                            TransportType *used) {
+                            TransportType *used, QString *description) {
     for (auto type : candidates(peer, policy)) {
         auto *t = transports_.value(static_cast<int>(type), nullptr);
         if (t && t->sendFrame(peer, bytes)) {
             if (used) *used = type;
+            if (description) *description = t->linkDescription(peer);
             return true;
         }
     }

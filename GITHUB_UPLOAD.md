@@ -1,19 +1,28 @@
-# Upload iniziale su GitHub
+# Aggiornare Easy-Chat su GitHub
 
-Da Fedora, dalla directory contenente i file del progetto:
+Repository locale usato durante lo sviluppo:
 
 ```bash
-git init
-git branch -M main
-git add .
-git commit -m "EChat v0.2"
-git remote add origin https://github.com/CosmoUniverso/Easy-Chat.git
-git push -u origin main
+~/Scaricati/Easy-Chat-local
 ```
 
-Se GitHub richiede autenticazione, usa GitHub CLI (`gh auth login`) o una credenziale/token GitHub; la password dell'account GitHub non viene accettata come password Git HTTPS.
+Per applicare lo ZIP v0.3:
 
-Dopo il push, apri la scheda **Actions** del repository. Il workflow `Build and Release EChat` compilerà Windows e Linux. Se entrambi i job terminano correttamente, la scheda **Releases** conterrà:
+```bash
+unzip -o ~/Scaricati/EChat-GitHub-ready-v0.3.zip -d ~/Scaricati/Easy-Chat-local
+cd ~/Scaricati/Easy-Chat-local
+
+git status
+git add -A
+git commit -m "EChat v0.3 mesh QUIC and TCP fallback"
+git push
+```
+
+Il push su `main` avvia `Build and Release EChat`.
+
+Se i job Windows e Linux sono verdi, la release `v0.3.0` conterrà:
 
 - `EChat-Windows-x64-Setup.exe`
 - `EChat-Linux-x86_64.AppImage`
+
+Se una build diventa rossa, apri il job fallito in **Actions**: il log compiler/package è la fonte da usare per la correzione successiva.

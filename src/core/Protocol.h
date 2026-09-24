@@ -8,7 +8,7 @@
 namespace ec::protocol {
 
 constexpr quint32 MaxFrameBytes = 8 * 1024 * 1024;
-constexpr int ProtocolVersion = 2;
+constexpr int ProtocolVersion = 3;
 
 QByteArray frame(const QJsonObject &object);
 QList<QJsonObject> consume(QByteArray &buffer);
@@ -18,5 +18,9 @@ bool verifyHello(const QJsonObject &object);
 QJsonObject encryptedMessage(const EncryptedEnvelope &envelope);
 QJsonObject ack(const QString &messageId, const LocalIdentity &identity);
 bool verifyAck(const QJsonObject &object, const QByteArray &signingPublicKey);
+
+QJsonObject relay(const LocalIdentity &identity, const QString &targetId,
+                  const QJsonObject &inner, TransportPolicy policy, int ttl = 4);
+bool verifyRelay(const QJsonObject &object, QJsonObject *inner = nullptr);
 
 } // namespace ec::protocol

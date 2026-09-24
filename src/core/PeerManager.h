@@ -21,13 +21,16 @@ public:
     bool updateFromHello(const QString &transportPeerKey,
                          TransportType transport,
                          const QJsonObject &hello);
+    bool updateIdentityFromHello(const QJsonObject &hello);
     void setReachable(const QString &userId, TransportType transport, bool reachable);
+    QString peerIdForTransportKey(TransportType transport, const QString &transportPeerKey) const;
 
 signals:
     void peerUpdated(const ec::Peer &peer);
     void securityWarning(const QString &message);
 
 private:
+    bool mergeIdentity(const QJsonObject &hello, Peer &peer);
     void persist(const Peer &peer);
     static QString fingerprint(const QByteArray &signingPublicKey, const QByteArray &kxPublicKey);
 

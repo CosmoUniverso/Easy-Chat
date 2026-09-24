@@ -211,7 +211,7 @@ void MainWindow::refreshHeader() {
     const auto c=conversations_.conversation(currentConversationId_);
     conversationTitle_->setText(c.type==ConversationType::Group?QStringLiteral("# %1").arg(c.name):c.name);
     if (c.type==ConversationType::Group) {
-        securityLabel_->setText(QStringLiteral("E2EE v2 · fan-out cifrato · %1 membri").arg(c.memberIds.size()));
+        securityLabel_->setText(QStringLiteral("E2EE v2 · fan-out cifrato · mesh P2P · %1 membri").arg(c.memberIds.size()));
         return;
     }
     for (const auto &id:c.memberIds) {
@@ -244,13 +244,15 @@ void MainWindow::refreshMessages() {
 void MainWindow::refreshRouteStatus() {
     if (currentConversationId_.isEmpty()) { routeLabel_->setText("Nessuna route"); return; }
     const auto c=conversations_.conversation(currentConversationId_);
-    int recipients=0,bt=0,lan=0,net=0;
+    int recipients=0,bt=0,lan=0,net=0,mesh=0;
+    const auto policy=selectedPolicy();
     for (const auto &id:c.memberIds) {
         if (id==identity_.userId || !peers_.hasPeer(id)) continue; ++recipients;
         const auto r=transports_.routesFor(peers_.peer(id)); bt+=r.bluetooth; lan+=r.lan; net+=r.internet;
+        if (!r.bluetooth && !r.lan && !r.internet && conversations_.relayPossible(id,policy)) ++mesh;
     }
-    routeLabel_->setText(QStringLiteral("Bluetooth %1/%4   ·   LAN %2/%4   ·   Internet %3/%4   ·   policy: %5")
-                         .arg(bt).arg(lan).arg(net).arg(recipients).arg(policyBox_->currentText()));
+    routeLabel_->setText(QStringLiteral("Bluetooth %1/%5   ·   LAN %2/%5   ·   Internet %3/%5   ·   Relay P2P %4/%5   ·   policy: %6")
+                         .arg(bt).arg(lan).arg(net).arg(mesh).arg(recipients).arg(policyBox_->currentText()));
 }
 
 void MainWindow::openBluetoothScanner() {

@@ -18,7 +18,7 @@ public:
     RouteState routesFor(const Peer &peer) const;
     QList<TransportType> candidates(const Peer &peer, TransportPolicy policy) const;
     bool send(const Peer &peer, const QByteArray &bytes, TransportPolicy policy,
-              TransportType *used = nullptr);
+              TransportType *used = nullptr, QString *description = nullptr);
 
 signals:
     void bytesReceived(ec::TransportType type, const QString &transportPeerKey, const QByteArray &bytes);

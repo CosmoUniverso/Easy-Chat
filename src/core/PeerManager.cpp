@@ -4,6 +4,13 @@
 #include <QCryptographicHash>
 
 namespace ec {
+namespace {
+QString lanHostFromTransportKey(const QString &key) {
+    if (key.startsWith(QStringLiteral("quic|"))) return key.mid(5);
+    if (key.startsWith(QStringLiteral("tcp|"))) return key.mid(4);
+    return key;
+}
+}
 
 PeerManager::PeerManager(Database &db, QObject *parent) : QObject(parent), db_(db) {
     for (const auto &p : db_.peers()) peers_.insert(p.userId, p);
@@ -21,21 +28,19 @@ QString PeerManager::fingerprint(const QByteArray &signPk, const QByteArray &kxP
     return groups.join('-');
 }
 
-bool PeerManager::updateFromHello(const QString &transportPeerKey,
-                                  TransportType transport,
-                                  const QJsonObject &hello) {
+bool PeerManager::mergeIdentity(const QJsonObject &hello, Peer &p) {
     if (!protocol::verifyHello(hello)) {
         emit securityWarning(QStringLiteral("HELLO EC non valido: firma Ed25519 rifiutata"));
         return false;
     }
+
     const QString userId = hello.value("userId").toString();
     if (userId.isEmpty()) return false;
     const QByteArray signPk = QByteArray::fromBase64(hello.value("signingPublicKey").toString().toLatin1());
     const QByteArray kxPk = QByteArray::fromBase64(hello.value("kxPublicKey").toString().toLatin1());
 
-    Peer p = peers_.value(userId);
     if (!p.signingPublicKey.isEmpty() && p.signingPublicKey != signPk) {
-        emit securityWarning(QStringLiteral("CHIAVE IDENTITA' CAMBIATA per %1. Connessione rifiutata.")
+        emit securityWarning(QStringLiteral("CHIAVE IDENTITA' CAMBIATA per %1. Identita' rifiutata.")
                              .arg(p.username.isEmpty() ? userId : p.username));
         return false;
     }
@@ -50,6 +55,32 @@ bool PeerManager::updateFromHello(const QString &transportPeerKey,
     p.connectivity.bluetoothCapable = caps.value("bluetooth").toBool();
     p.connectivity.lanCapable = caps.value("lan").toBool();
     p.connectivity.internetCapable = caps.value("internet").toBool();
+    p.connectivity.meshCapable = caps.value("mesh").toBool();
+    p.connectivity.quicCapable = caps.value("quic").toBool();
+    p.connectivity.tcpFallbackCapable = caps.value("tcpFallback").toBool();
+    return true;
+}
+
+bool PeerManager::updateIdentityFromHello(const QJsonObject &hello) {
+    const QString userId = hello.value("userId").toString();
+    if (userId.isEmpty()) return false;
+    Peer p = peers_.value(userId);
+    if (!mergeIdentity(hello, p)) return false;
+    peers_[userId] = p;
+    persist(p);
+    emit peerUpdated(p);
+    return true;
+}
+
+bool PeerManager::updateFromHello(const QString &transportPeerKey,
+                                  TransportType transport,
+                                  const QJsonObject &hello) {
+    const QString userId = hello.value("userId").toString();
+    if (userId.isEmpty()) return false;
+
+    Peer p = peers_.value(userId);
+    if (!mergeIdentity(hello, p)) return false;
+
     const auto now = QDateTime::currentDateTimeUtc();
     switch (transport) {
     case TransportType::Bluetooth:
@@ -58,7 +89,7 @@ bool PeerManager::updateFromHello(const QString &transportPeerKey,
         p.connectivity.bluetoothLastSeen = now;
         break;
     case TransportType::Lan:
-        p.lanHost = transportPeerKey;
+        p.lanHost = lanHostFromTransportKey(transportPeerKey);
         p.connectivity.lanReachable = true;
         p.connectivity.lanLastSeen = now;
         break;
@@ -68,6 +99,7 @@ bool PeerManager::updateFromHello(const QString &transportPeerKey,
         p.connectivity.internetLastSeen = now;
         break;
     }
+
     peers_[userId] = p;
     persist(p);
     emit peerUpdated(p);
@@ -84,7 +116,26 @@ void PeerManager::setReachable(const QString &userId, TransportType transport, b
     case TransportType::Internet: p.connectivity.internetReachable = reachable; if (reachable) p.connectivity.internetLastSeen = now; break;
     }
     peers_[userId] = p;
+    persist(p);
     emit peerUpdated(p);
+}
+
+QString PeerManager::peerIdForTransportKey(TransportType transport, const QString &key) const {
+    for (auto it = peers_.cbegin(); it != peers_.cend(); ++it) {
+        const auto &p = it.value();
+        switch (transport) {
+        case TransportType::Bluetooth:
+            if (p.bluetoothAddress.compare(key, Qt::CaseInsensitive) == 0) return p.userId;
+            break;
+        case TransportType::Lan:
+            if (p.lanHost == lanHostFromTransportKey(key)) return p.userId;
+            break;
+        case TransportType::Internet:
+            if (p.relayDeviceId == key) return p.userId;
+            break;
+        }
+    }
+    return {};
 }
 
 void PeerManager::persist(const Peer &peer) { db_.upsertPeer(peer); }

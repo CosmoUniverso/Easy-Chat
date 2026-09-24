@@ -1,4 +1,5 @@
 #include "crypto/CryptoEngine.h"
+#include "core/Protocol.h"
 #include <QCoreApplication>
 #include <iostream>
 
@@ -42,6 +43,25 @@ int main(int argc, char **argv) {
         return 2;
     }
 
-    std::cout << "EChat crypto v2 self-test: OK\n";
+    const auto cleanEnvelope = crypto.encryptFor(m, alice, bobPeer);
+    const QJsonObject inner = ec::protocol::encryptedMessage(cleanEnvelope);
+    auto relay = ec::protocol::relay(alice, bob.userId, inner, ec::TransportPolicy::Auto, 4);
+    QJsonObject relayInner;
+    if (!ec::protocol::verifyRelay(relay, &relayInner) || relayInner.value("messageId") != m.id) {
+        std::cerr << "relay signature test failed\n";
+        return 3;
+    }
+    relay["ttl"] = 2;
+    if (!ec::protocol::verifyRelay(relay, nullptr)) {
+        std::cerr << "relay ttl forwarding test failed\n";
+        return 4;
+    }
+    relay["targetId"] = QStringLiteral("tampered-target");
+    if (ec::protocol::verifyRelay(relay, nullptr)) {
+        std::cerr << "relay tamper test failed\n";
+        return 5;
+    }
+
+    std::cout << "EChat crypto v2 + mesh protocol v3 self-test: OK\n";
     return 0;
 }
