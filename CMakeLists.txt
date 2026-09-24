@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.24)
-project(EChat VERSION 0.3.1 LANGUAGES CXX)
+project(EChat VERSION 0.4.0 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -110,4 +110,7 @@ option(ECHAT_BUILD_TESTS "Build EChat self-tests" OFF)
 if (ECHAT_BUILD_TESTS)
     qt_add_executable(EChatCryptoSelfTest tests/CryptoSelfTest.cpp)
     target_link_libraries(EChatCryptoSelfTest PRIVATE echat_core)
+
+    qt_add_executable(EChatReliabilitySelfTest tests/ReliabilitySelfTest.cpp)
+    target_link_libraries(EChatReliabilitySelfTest PRIVATE echat_core)
 endif()

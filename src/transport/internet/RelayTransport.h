@@ -12,5 +12,6 @@ public:
     void start() override {}
     void stop() override {}
     bool sendFrame(const Peer &, const QByteArray &) override { return false; }
+    int linkCost(const Peer &) const override { return 160; }
 };
 }

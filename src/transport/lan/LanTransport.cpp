@@ -5,6 +5,7 @@
 #include <QJsonObject>
 #include <QNetworkDatagram>
 #include <QNetworkInterface>
+#include <QtGlobal>
 
 namespace ec {
 
@@ -62,6 +63,16 @@ QString LanTransport::linkDescription(const Peer &peer) const {
     }
     if (tcpConnected(peer.lanHost)) return QStringLiteral("LAN/TCP fallback");
     return QStringLiteral("LAN");
+}
+
+int LanTransport::linkCost(const Peer &peer) const {
+    if (peer.lanHost.isEmpty()) return 1000;
+    if (quic_.connected(peer.lanHost)) {
+        const int rtt = quic_.rttMs(peer.lanHost);
+        return rtt >= 0 ? qBound(15, 20 + rtt, 400) : 40;
+    }
+    if (tcpConnected(peer.lanHost)) return 70;
+    return 1000;
 }
 
 void LanTransport::setIdentity(const LocalIdentity &identity) { identity_ = identity; }

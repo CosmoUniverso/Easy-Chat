@@ -18,6 +18,7 @@ public:
     virtual void stop() = 0;
     virtual bool sendFrame(const Peer &peer, const QByteArray &frame) = 0;
     virtual QString linkDescription(const Peer &) const { return transportName(type()); }
+    virtual int linkCost(const Peer &) const { return 100; }
 
 signals:
     void bytesReceived(const QString &transportPeerKey, const QByteArray &bytes);

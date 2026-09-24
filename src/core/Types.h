@@ -88,6 +88,30 @@ struct EncryptedEnvelope {
     QByteArray signature;          // Ed25519 over envelope metadata+ciphertext
 };
 
+struct OutboxEntry {
+    QString id;
+    QString targetId;
+    QByteArray payload;
+    TransportPolicy policy = TransportPolicy::Auto;
+    QString kind;
+    QString logicalId;
+    qint64 createdAtMs = 0;
+    qint64 nextAttemptMs = 0;
+    qint64 expiresAtMs = 0;
+    int attempts = 0;
+};
+
+struct RelaySpoolEntry {
+    QString packetId;
+    QString targetId;
+    QByteArray payload;
+    TransportPolicy policy = TransportPolicy::Auto;
+    qint64 createdAtMs = 0;
+    qint64 nextAttemptMs = 0;
+    qint64 expiresAtMs = 0;
+    int attempts = 0;
+};
+
 struct RouteState {
     bool bluetooth = false;
     bool lan = false;

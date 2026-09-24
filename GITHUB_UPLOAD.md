@@ -20,7 +20,7 @@ git push
 
 Il push su `main` avvia `Build and Release EChat`.
 
-Se i job Windows e Linux sono verdi, la release `v0.3.1` conterrà:
+Se i job Windows e Linux sono verdi, la release `v0.4.0` conterrà:
 
 - `EChat-Windows-x64-Setup.exe`
 - `EChat-Linux-x86_64.AppImage`

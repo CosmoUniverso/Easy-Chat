@@ -30,26 +30,41 @@ public:
                      TransportPolicy policy = TransportPolicy::Auto);
     bool relayPossible(const QString &targetPeerId,
                        TransportPolicy policy = TransportPolicy::Auto) const;
+    QString deliveryIndicator(const QString &messageId) const;
+    QString reliabilitySummary() const;
 
 signals:
     void conversationUpdated(const ec::Conversation &conversation);
     void messageAdded(const ec::Message &message);
     void deliveryInfo(const QString &messageId, const QString &info);
     void protocolError(const QString &error);
+    void reliabilityStateChanged();
 
 private:
     static TransportPolicy onlyPolicy(TransportType type);
+    static qint64 retryDelayMs(int attempts, bool awaitingAck = false);
+    static QString outboxId(const QString &kind, const QString &logicalId, const QString &targetId);
+
     void onBytes(TransportType type, const QString &transportPeerKey, const QByteArray &bytes);
     void handleObject(TransportType type, const QString &transportPeerKey, const QJsonObject &object);
 
     bool sendObjectToPeer(const Peer &peer, const QJsonObject &object, TransportPolicy policy,
                           QString *routeDescription = nullptr);
     bool floodRelay(QJsonObject relay, TransportPolicy policy, const QString &excludePeerId = {});
+    bool forwardRelay(const QJsonObject &relay, TransportPolicy policy, const QString &excludePeerId = {});
     void handleRelay(TransportType type, const QString &transportPeerKey, const QJsonObject &object);
     void handleMeshAnnounce(TransportType type, const QString &transportPeerKey, const QJsonObject &object);
     void broadcastIdentity();
     bool markPacketSeen(const QString &packetId);
     void cleanupSeenPackets();
+
+    void queueOutbound(const QString &targetId, const QJsonObject &object, TransportPolicy policy,
+                       const QString &kind, const QString &logicalId, qint64 firstAttemptMs);
+    void retryPersistentQueues();
+    void retryOutbox();
+    void retryRelaySpool();
+    void materializePendingPeerDeliveries(const QString &peerId);
+    void queueRelaySpool(const QJsonObject &relay, TransportPolicy policy);
 
     Database &db_;
     CryptoEngine &crypto_;
@@ -60,6 +75,8 @@ private:
     QHash<QString, QByteArray> receiveBuffers_;
     QHash<QString, qint64> seenPackets_;
     QTimer meshAnnounceTimer_;
+    QTimer retryTimer_;
+    bool retrying_ = false;
 };
 
 } // namespace ec

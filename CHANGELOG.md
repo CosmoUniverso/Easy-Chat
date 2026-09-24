@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.4.0
+
+- Added a persistent encrypted sender outbox in SQLite.
+- Messages are retained and retried until a valid signed end-to-end ACK arrives.
+- Added exponential retry/backoff with seven-day sender-outbox expiry.
+- Added persistent intermediate relay store-and-forward with a 24-hour custody window and 256-packet cap.
+- Relay nodes retry opaque signed relay envelopes after temporary path loss without decrypting message text.
+- Added automatic materialization/retry when a previously unknown peer identity becomes available through signed HELLO propagation.
+- Replaced fixed Auto transport order with adaptive direct-link scoring.
+- LAN/QUIC score incorporates live MsQuic RTT; TCP fallback and RFCOMM use fixed baseline costs.
+- Prefer-* policies now bias scoring while Only-* policies remain strict.
+- Added delivery indicators and queue/relay-spool diagnostics to the GUI.
+- Added SQLite reliability self-test and CI execution on Linux.
+- Wire protocol remains v3; 0.4 is intended to remain compatible with 0.3 at the protocol framing level.
+
 ## 0.3.1
 
 - Fixed unreadable light popup/dialog backgrounds with light text on Linux/Fedora.

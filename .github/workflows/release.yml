@@ -113,6 +113,7 @@ jobs:
           cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DECHAT_BUILD_TESTS=ON
           cmake --build build
           ./build/EChatCryptoSelfTest
+          ./build/EChatReliabilitySelfTest
 
       - name: Build one-file AppImage
         env:
@@ -180,19 +181,20 @@ jobs:
           body: |
             EChat ${{ steps.version.outputs.version }} pre-alpha.
 
-            0.3 adds:
-            - Bluetooth Classic/RFCOMM direct messaging
-            - LAN discovery over UDP
-            - MsQuic 2.6.1 as the preferred LAN data channel
-            - TCP LAN fallback when QUIC is unavailable
-            - signed multi-hop P2P relay for direct chats and group fan-out
+            0.4 reliability update:
+            - persistent encrypted sender outbox with end-to-end ACK retries
+            - persistent relay store-and-forward across temporary disconnections
+            - adaptive direct transport scoring using QUIC RTT plus transport cost
+            - automatic retry when a previously unknown peer identity becomes available
+            - delivery indicators and queue/spool diagnostics in the GUI
+            - Bluetooth Classic/RFCOMM, LAN QUIC/TCP and signed multi-hop relay from 0.3
 
             Ready-to-run downloads:
             - Windows 10/11 x64: `EChat-Windows-x64-Setup.exe`
             - Linux/Fedora x86_64: `EChat-Linux-x86_64.AppImage`
 
             The console client is experimental and is bundled with both packages.
-            Mesh/LAN in 0.3 is pre-alpha and needs multi-device validation. Crypto v2 is not a Double Ratchet and is not recommended for high-risk communications.
+            Reliability/mesh in 0.4 is pre-alpha and still needs multi-device interruption/reconnect validation. Crypto v2 is not a Double Ratchet and is not recommended for high-risk communications.
           prerelease: true
           make_latest: false
           overwrite_files: true

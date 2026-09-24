@@ -1,4 +1,4 @@
-# EChat 0.3 architecture
+# EChat 0.4 architecture
 
 ```text
                               EChat Core
@@ -7,24 +7,74 @@
        |                          |                          |
     Identity                Conversations                Storage
  Ed25519/X25519             Direct + Group               SQLite
-       |                          |
-       +-------------------- CryptoEngine
+       |                          |                    /      |      \
+       +-------------------- CryptoEngine          history  outbox  relay spool
                                   |
                          E2EE recipient envelope
                                   |
                          ConversationManager
-                         direct or mesh relay
+                    direct / retry / store-forward
                                   |
                          TransportManager
+                     adaptive local scoring
                        /          |           \
                Bluetooth          LAN         Internet
                 RFCOMM       QUIC -> TCP        future
                               fallback        QUIC/WSS
 ```
 
-## Direct and relayed paths
+## End-to-end delivery
 
-A recipient does not need to share a physical transport with the sender.
+A local socket write is not considered final delivery.
+
+```text
+message plaintext
+      |
+      v
+recipient-specific E2EE envelope
+      |
+      +----> SQLite sender outbox ------------------+
+      |                                             |
+      +----> direct / relay attempt                 |
+                                                    |
+final recipient decrypts + sends signed ACK         |
+      |                                             |
+      +---------------------- ACK ------------------+
+                                                    v
+                                            delete outbox entry
+```
+
+The outbox persists across application restart. Retries use exponential backoff and can create a fresh relay wrapper around the same final-recipient ciphertext.
+
+## Relay store-and-forward
+
+```text
+A ----> B ----X----> C
+        |
+        +-- verify origin relay signature
+        +-- store opaque relay object in SQLite
+        |
+        +-- retry later ----> C
+```
+
+B never needs to decrypt the message body. Relay spool custody is bounded: entries expire after 24 hours and the local spool is capped at 256 packets. The origin's persistent outbox remains the end-to-end reliability source, so an intermediate relay can remove its local spool entry after it successfully forwards the packet to another hop.
+
+## Routing
+
+EChat still separates capability, reachability and user policy. In 0.4 the direct transport order is computed dynamically.
+
+```text
+score(Bluetooth) = fixed RFCOMM cost
+score(LAN/QUIC)  = base + measured RTT
+score(LAN/TCP)   = fixed fallback cost
+score(Internet)  = higher reserved cost
+```
+
+`Prefer*` policies apply a strong preference bias so the requested reachable transport wins; `Only*` policies restrict the candidate set. The lowest-cost reachable direct transport is tried first.
+
+Mesh path discovery is still bounded flooding with packet IDs, TTL and duplicate suppression. This release does not yet exchange a global topology or run Dijkstra. Therefore the route score is **per direct hop**, not an end-to-end path metric.
+
+## Direct and relayed paths
 
 ```text
 PC2                              PC1                              PC3
@@ -35,23 +85,7 @@ Bluetooth only             Bluetooth + LAN                    LAN only
      [E2EE envelope encrypted for PC3 remains opaque to PC1]
 ```
 
-The same mechanism is used for a direct conversation and for each recipient envelope in a group fan-out.
-
-## Routing invariant
-
-EChat separates capability, current reachability and user policy. A direct route requires all three to allow the transport.
-
-When the final peer has no direct route, protocol v3 may send a signed `relay` object to a reachable mesh-capable neighbor. Current mesh selection is bounded flooding, not a full route table:
-
-```text
-origin packetId
-   -> TTL/maxHops <= 4 by default
-   -> seen-packet cache suppresses loops/duplicates
-   -> previous hop excluded from immediate forwarding
-   -> destination consumes the inner object
-```
-
-The relay signature covers the immutable routing fields and exact inner payload. `ttl` is deliberately mutable so each hop can decrement it, but it cannot exceed the origin-signed `maxHops`.
+If PC3 disappears, PC1 may persist the signed relay object and continue later. PC2 also retains its own encrypted message object until PC3's signed ACK returns.
 
 ## LAN stack
 
@@ -61,55 +95,19 @@ QUIC/UDP 45454  preferred reliable data channel (MsQuic)
 TCP/45456       compatibility fallback
 ```
 
-On discovery, peers may establish QUIC and TCP in parallel. Application sends prefer an established QUIC connection; if QUIC is unavailable or a stream cannot be sent, TCP is attempted.
-
-QUIC exposes RTT statistics used in the GUI/delivery route description. MsQuic performs QUIC congestion control and loss recovery, so EChat does not implement a home-grown UDP reliability layer.
-
-TCP is only a transport fallback in 0.3. Message bodies are still protected by EChat E2EE, but a TLS-wrapped local TCP fallback is not yet implemented.
-
-## Receive framing
-
-Every transport carries the same application framing:
-
-```text
-uint32 big-endian payload length
-JSON protocol object
-```
-
-QUIC and TCP use distinct receive-buffer keys even for the same IP address, preventing partial TCP reads from being interleaved with complete QUIC stream frames.
+QUIC RTT feeds the direct-route cost. QUIC and TCP keep separate receive-buffer keys so simultaneous channels from one IP cannot corrupt application framing.
 
 ## Identity and trust
 
-Each identity has independent keys:
+Each identity has independent Ed25519 signing and X25519 key-exchange keys. Signed HELLO objects can propagate through the mesh, but indirect discovery does not mark a peer directly reachable. Unexpected Ed25519 identity-key changes are rejected under TOFU.
 
-```text
-Ed25519 -> identity signatures
-X25519  -> recipient key agreement
-```
+## Relay privacy
 
-Direct HELLO frames and mesh-propagated HELLO frames are signed. Indirect identity discovery updates public identity material but does **not** mark that peer as directly reachable.
+Intermediate nodes can inspect protocol/routing metadata needed for forwarding, including origin, target, timing, size, TTL and policy. The message body remains final-recipient ciphertext.
 
-Unexpected Ed25519 identity-key changes for a known `userId` are rejected (TOFU).
+## Cryptography
 
-## Relay privacy model
-
-Intermediate peers need enough metadata to forward:
-
-```text
-packetId
-originId
-targetId
-TTL / maxHops
-policy
-signed origin HELLO
-opaque inner payload
-```
-
-The inner message envelope contains ciphertext encrypted for the final recipient. A relay can see routing metadata and traffic timing/size, but cannot decrypt the chat text without the final recipient's private key.
-
-## Message crypto v2
-
-For each recipient independently:
+Crypto v2 remains:
 
 ```text
 sender ephemeral X25519 + recipient static X25519
@@ -125,27 +123,12 @@ sender ephemeral X25519 + recipient static X25519
           Ed25519 envelope signature
 ```
 
-This is not a Double Ratchet. A later session layer is required for full forward secrecy/post-compromise security.
+This is not a Double Ratchet and does not yet provide Signal-style forward secrecy/post-compromise security.
 
-## Groups
+## Next layers
 
-Group delivery remains per-recipient fan-out:
-
-```text
-Group M
-  -> E2EE for Alice -> direct or relay route
-  -> E2EE for Bob   -> direct or relay route
-  -> E2EE for Carol -> direct or relay route
-```
-
-This means a mixed group can contain Bluetooth-only and LAN-only members as long as the live mesh provides a path between them.
-
-## Planned layers
-
-- BLE/GATT advertising for low-power discovery/presence.
-- QUIC datagrams for ephemeral typing/presence data.
-- Internet relay: QUIC primary, WSS/TCP 443 compatibility fallback.
-- Persistent store-and-forward retry queue across temporary disconnections.
-- Link-state/path-cost routing using RTT, loss/stability, bandwidth and hop cost.
-- Chunked/resumable file transfer engine.
-- Ratcheting E2EE session protocol.
+- Full topology/path-cost routing with hop cost, RTT, loss/stability and bandwidth.
+- BLE/GATT low-power discovery/presence.
+- Internet relay with QUIC primary and WSS/TCP 443 fallback.
+- Chunked/resumable file transfer.
+- Ratcheting E2EE sessions and OS-protected private-key storage.

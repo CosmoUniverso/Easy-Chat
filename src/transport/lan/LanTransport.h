@@ -23,6 +23,7 @@ public:
     void stop() override;
     bool sendFrame(const Peer &peer, const QByteArray &frame) override;
     QString linkDescription(const Peer &peer) const override;
+    int linkCost(const Peer &peer) const override;
 
     void setIdentity(const LocalIdentity &identity);
 

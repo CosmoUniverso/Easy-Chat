@@ -24,6 +24,7 @@ public:
     void stop() override;
     bool sendFrame(const Peer &peer, const QByteArray &frame) override;
     QString linkDescription(const Peer &) const override { return QStringLiteral("Bluetooth/RFCOMM"); }
+    int linkCost(const Peer &) const override { return 80; }
 
     void setIdentity(const LocalIdentity &identity);
     void scan();

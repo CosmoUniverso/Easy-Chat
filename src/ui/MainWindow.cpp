@@ -150,7 +150,12 @@ MainWindow::MainWindow(const LocalIdentity &identity, CryptoEngine &crypto, Peer
         statusLabel_->setText(warning); QMessageBox::warning(this, "EChat — sicurezza", warning);
     });
     connect(&transports_, &TransportManager::statusMessage, statusLabel_, &QLabel::setText);
-    connect(&conversations_, &ConversationManager::deliveryInfo, this, [this](const QString &, const QString &info) { statusLabel_->setText(info); });
+    connect(&conversations_, &ConversationManager::deliveryInfo, this, [this](const QString &, const QString &info) {
+        statusLabel_->setText(info); refreshMessages(); refreshRouteStatus();
+    });
+    connect(&conversations_, &ConversationManager::reliabilityStateChanged, this, [this] {
+        refreshMessages(); refreshRouteStatus();
+    });
     connect(&conversations_, &ConversationManager::protocolError, this, [this](const QString &error) { statusLabel_->setText(error); });
     connect(&bluetooth_, &BluetoothTransport::connectionChanged, this, [this](const QString &, bool) { refreshRouteStatus(); });
 
@@ -257,13 +262,15 @@ void MainWindow::refreshMessages() {
         QString sender=mine?QStringLiteral("Tu"):m.senderId;
         if (peers_.hasPeer(m.senderId)) sender=peers_.peer(m.senderId).username;
         const QString time=QDateTime::fromMSecsSinceEpoch(m.timestampMs).toLocalTime().toString("HH:mm");
+        const QString delivery=mine?conversations_.deliveryIndicator(m.id):QString();
+        const QString meta=delivery.isEmpty()?time:QStringLiteral("%1 · %2").arg(time).arg(delivery);
         const QString align=mine?QStringLiteral("right"):QStringLiteral("left");
         const QString bg=mine?QStringLiteral("#3d4f9f"):QStringLiteral("#222731");
         html += QStringLiteral("<div style='text-align:%1;margin:9px 4px;'>"
                                "<div style='display:inline-block;max-width:72%;background:%2;border-radius:12px;padding:9px 12px;text-align:left;'>"
                                "<div style='font-size:11px;color:#aeb7c5;margin-bottom:4px;'><b>%3</b> · %4</div>"
                                "<div style='font-size:14px;'>%5</div></div></div>")
-                    .arg(align).arg(bg).arg(sender.toHtmlEscaped()).arg(time).arg(m.text.toHtmlEscaped().replace("\n","<br>"));
+                    .arg(align).arg(bg).arg(sender.toHtmlEscaped()).arg(meta.toHtmlEscaped()).arg(m.text.toHtmlEscaped().replace("\n","<br>"));
     }
     html += "</body></html>"; messages_->setHtml(html); messages_->verticalScrollBar()->setValue(messages_->verticalScrollBar()->maximum());
 }
@@ -278,8 +285,8 @@ void MainWindow::refreshRouteStatus() {
         const auto r=transports_.routesFor(peers_.peer(id)); bt+=r.bluetooth; lan+=r.lan; net+=r.internet;
         if (!r.bluetooth && !r.lan && !r.internet && conversations_.relayPossible(id,policy)) ++mesh;
     }
-    routeLabel_->setText(QStringLiteral("Bluetooth %1/%5   ·   LAN %2/%5   ·   Internet %3/%5   ·   Relay P2P %4/%5   ·   policy: %6")
-                         .arg(bt).arg(lan).arg(net).arg(mesh).arg(recipients).arg(policyBox_->currentText()));
+    routeLabel_->setText(QStringLiteral("Bluetooth %1/%5   ·   LAN %2/%5   ·   Internet %3/%5   ·   Relay P2P %4/%5   ·   policy: %6   ·   %7")
+                         .arg(bt).arg(lan).arg(net).arg(mesh).arg(recipients).arg(policyBox_->currentText()).arg(conversations_.reliabilitySummary()));
 }
 
 void MainWindow::openBluetoothScanner() {

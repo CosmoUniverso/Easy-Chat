@@ -1,47 +1,44 @@
 # EChat — Easy Chat
 
-EChat 0.3 is an offline-first desktop messenger prototype for **Windows 10/11 and Linux/Fedora**. Bluetooth Classic/RFCOMM remains the primary no-network data channel; 0.3 adds LAN communication and multi-hop peer relay.
+EChat 0.4 is an offline-first desktop messenger prototype for **Windows 10/11 and Linux/Fedora**. It combines Bluetooth Classic/RFCOMM, LAN QUIC/TCP, end-to-end encrypted multi-hop relay and persistent retry/store-and-forward for intermittent networks.
 
-## 0.3 implemented
+## 0.4 implemented
 
-- Desktop GUI inspired by modern WhatsApp/Discord layouts.
-- Experimental console client: `echat-cli`.
-- Direct chats and groups use the same conversation/message model.
-- **Bluetooth Classic/RFCOMM** direct data channel.
+- Desktop GUI plus experimental `echat-cli`.
+- Direct chats and groups share the same conversation/message model.
+- **Bluetooth Classic/RFCOMM** offline data channel.
 - **LAN discovery over UDP broadcast**.
-- **QUIC over UDP via MsQuic 2.6.1** as the preferred LAN data channel when available.
-- **TCP fallback** on LAN when QUIC is unavailable or cannot establish a connection.
-- Per-peer transport capability, reachability and user policy remain separate.
-- Multi-hop **P2P mesh relay** for both direct chats and groups.
-- A node with multiple transports can bridge peers that do not share a transport, for example Bluetooth -> relay PC -> LAN.
-- Relay packets have packet IDs, hop limit/TTL and duplicate suppression.
-- Relay headers and destination are signed by the origin identity; intermediaries cannot silently retarget or modify the encrypted payload.
-- Group fan-out still creates an independently encrypted envelope for each recipient; each recipient may use a different direct or relayed route.
-- SQLite history and delivery state.
+- **QUIC/UDP via MsQuic 2.6.1** as preferred LAN data channel.
+- **TCP LAN fallback** when QUIC is unavailable.
+- Signed multi-hop P2P relay capable of bridging Bluetooth and LAN peers.
+- Per-recipient group fan-out with an independently encrypted E2EE envelope.
+- **Persistent sender outbox** in SQLite. A message remains queued until the final recipient sends a valid signed ACK.
+- **Persistent relay spool** in SQLite. An intermediate bridge can hold an opaque relay envelope while the next path is unavailable and forward it later.
+- Exponential retry/backoff with bounded retry batches and expiry.
+- Unknown-recipient delivery is materialized automatically after that peer's signed identity becomes known.
+- **Adaptive direct transport scoring**: Auto mode uses current link cost instead of a fixed Bluetooth-first order. QUIC RTT participates in the LAN score.
+- Delivery indicators (`…`, `✓`, `✓✓`) and queue/spool diagnostics in the GUI.
 - Signed HELLO and ACK frames, fingerprints and TOFU identity-key change protection.
 
-## Example: Bluetooth-to-LAN relay
+## Intermittent bridge example
 
 ```text
-PC2 (Bluetooth only)
-        |
-     RFCOMM
-        |
-        v
-PC1 (Bluetooth + LAN)
-        |
-   QUIC preferred
-   TCP fallback
-        |
-        v
-PC3 (LAN only)
+PC2 (Bluetooth only)       PC1 (Bluetooth + LAN)         PC3 (LAN only)
+        |                           |                           |
+        +--------- RFCOMM -------->+                           |
+                                    |   PC3 temporarily off    |
+                                    |   [relay ciphertext]      |
+                                    |   stored in SQLite        |
+                                    |                           |
+                                    +------ QUIC/TCP ---------->+
+                                            when PC3 returns
 ```
 
-PC2 encrypts the message **for PC3** before giving it to PC1. PC1 forwards the signed relay envelope but does not possess PC3's private key and therefore cannot decrypt the message body.
+PC2 encrypts the message **for PC3** before PC1 receives it. PC1 can store and forward the signed relay envelope, but it does not have PC3's private key and cannot decrypt the chat text.
+
+The sender also keeps its encrypted recipient envelope in its own persistent outbox until a valid end-to-end ACK arrives. Therefore a successful local socket write is not treated as final delivery.
 
 ## LAN transport
-
-EChat 0.3 uses three LAN ports by default:
 
 | Purpose | Protocol | Port |
 |---|---|---:|
@@ -49,51 +46,68 @@ EChat 0.3 uses three LAN ports by default:
 | local discovery | UDP broadcast | 45455 |
 | compatibility fallback | TCP | 45456 |
 
-QUIC provides reliable streams, TLS 1.3 transport security, loss recovery and congestion control. EChat currently sends chat protocol frames on reliable QUIC streams. QUIC datagrams are reserved for later ephemeral features such as presence/typing and are not yet part of the user-facing protocol.
+QUIC supplies reliable streams, TLS 1.3 transport protection, congestion control and RTT statistics. Chat protocol frames currently use reliable QUIC streams. QUIC datagrams are reserved for later presence/typing features.
 
-The TCP fallback is currently a raw TCP transport carrying the same **application-level E2EE frames**. It is intended as a compatibility path when QUIC/UDP is blocked. A TLS/WSS Internet fallback belongs to the future relay-server layer and is not implemented in 0.3.
+The TCP fallback is raw TCP carrying the same **application-level E2EE frames**. An Internet relay with QUIC plus WSS/TCP 443 fallback is still future work.
 
-If local UDP discovery itself is blocked or clients are isolated by a managed network/VLAN, EChat does not try to bypass that policy. A later Internet relay can provide a permitted remote route instead.
+## Adaptive routing in 0.4
 
-## Routing
+EChat separates peer capability, live reachability and user policy. `Auto` now scores available direct transports rather than using a fixed order.
 
-For every peer EChat separates:
+Current direct-link cost model:
 
-1. **capability** — what the peer software supports;
-2. **reachability** — what is connected/reachable now;
-3. **policy** — Auto, Only Bluetooth/LAN/Internet, Prefer Bluetooth/LAN/Internet.
+- LAN/QUIC: low base cost plus measured MsQuic RTT.
+- LAN/TCP fallback: medium fixed cost.
+- Bluetooth/RFCOMM: medium fixed cost.
+- Internet relay transport: reserved higher cost once implemented.
 
-A direct route is attempted first. If the destination has no direct route, EChat can wrap the already encrypted object in a signed relay envelope and forward it through reachable mesh-capable peers, up to the hop limit.
+`Prefer Bluetooth/LAN/Internet` gives the preferred reachable transport priority while still allowing fallback. `Only ...` policies remain strict.
 
-0.3 uses bounded flooding plus deduplication rather than a full link-state routing protocol. RTT from MsQuic is exposed in route descriptions, but automatic global path-cost optimization is a later step.
+Multi-hop selection is still **bounded mesh flooding**, not a global link-state/Dijkstra protocol. Each hop does use the adaptive local transport choice. Full path-cost advertisements and loss/stability/bandwidth metrics remain later work.
+
+## Persistent delivery semantics
+
+For locally-originated messages:
+
+1. Encrypt once for the final recipient.
+2. Save the encrypted protocol object in SQLite outbox.
+3. Attempt direct or mesh delivery immediately.
+4. Keep retrying with exponential backoff until a signed end-to-end ACK is received or the entry expires.
+5. Delete the outbox entry only after that ACK.
+
+For intermediate relays:
+
+1. Verify the origin-signed relay envelope.
+2. Try the final peer directly, then reachable mesh neighbors.
+3. If no next path exists, persist the opaque relay envelope in the relay spool.
+4. Retry when connectivity changes / on the periodic retry loop.
+5. Remove local custody after successful forwarding. The origin's end-to-end outbox remains the ultimate reliability mechanism.
+
+Current defaults are seven days for sender outbox entries, 24 hours for relay-spool custody, a maximum of 256 stored relay packets, and retry delays capped at 60 seconds.
 
 ## Cryptography v2 + mesh protocol v3
 
 Message encryption remains crypto v2:
 
-- **Ed25519** long-term identity signatures.
-- **X25519** key agreement.
-- Fresh ephemeral X25519 sender key for every recipient envelope.
-- **BLAKE2b** key derivation.
-- **XChaCha20-Poly1305-IETF** authenticated message encryption.
+- Ed25519 long-term identity signatures.
+- X25519 key agreement.
+- Fresh ephemeral X25519 sender key per recipient/message.
+- BLAKE2b keyed derivation.
+- XChaCha20-Poly1305-IETF authenticated encryption.
 
-Protocol v3 adds signed relay metadata around the existing encrypted envelope. Relay nodes see routing metadata needed to forward a packet, but message text remains encrypted for the final recipient.
+The same encrypted envelope may be retransmitted while waiting for its ACK; retries do not re-encrypt the message or expose plaintext to relay nodes.
+
+Protocol v3 relay metadata remains origin-signed. EChat 0.4 does **not** introduce a wire-protocol break relative to 0.3.
 
 ### Security boundary
 
-This is **not a Signal Double Ratchet implementation**. A compromise of a recipient's long-term X25519 private key can still expose previously captured crypto-v2 envelopes. Full forward secrecy/post-compromise security requires a ratcheting session protocol.
+This is **not Signal Double Ratchet**. Compromise of a recipient's long-term X25519 private key can expose previously captured crypto-v2 envelopes. A future ratcheting session layer is required for forward secrecy and post-compromise security.
 
-Private identity keys are still stored in the local SQLite database in this development build. They should move to OS-protected credential/key storage or an encrypted local vault before a production release.
-
-The self-signed certificate used by local QUIC authenticates the QUIC transport cryptographically but EChat's peer identity is still authenticated at the application layer by signed Ed25519 HELLO frames. The client currently accepts the local self-signed QUIC certificate because EChat performs its own identity pinning above the transport.
-
-## Compatibility
-
-Protocol v3 changes the signed capability/relay protocol. For mesh/LAN testing, use EChat 0.3 on all participating machines; 0.2 should not be treated as protocol-compatible with 0.3.
+Private identity keys are still stored in the local SQLite database in this development build. Production should move them to OS-protected credential storage or an encrypted local vault.
 
 ## Build on Fedora
 
-The project can compile without MsQuic; in that case LAN uses the TCP fallback only.
+Without MsQuic the project still builds and uses LAN TCP fallback only.
 
 ```bash
 sudo dnf install -y gcc-c++ cmake qt6-qtbase-devel qt6-qtconnectivity-devel libsodium-devel pkgconf-pkg-config openssl
@@ -102,7 +116,7 @@ cmake --build build -j
 ./build/EChat
 ```
 
-For a QUIC-enabled manual build, install a current MsQuic 2.6.x package/header or point CMake at it:
+For QUIC:
 
 ```bash
 cmake -S . -B build \
@@ -111,45 +125,34 @@ cmake -S . -B build \
 cmake --build build -j
 ```
 
-The GitHub release workflow installs **MsQuic 2.6.1** automatically and packages it with the release artifacts.
-
-Optional self-test:
+Self-tests:
 
 ```bash
 cmake -S . -B build-test -DECHAT_BUILD_TESTS=ON
 cmake --build build-test -j
 ./build-test/EChatCryptoSelfTest
-```
-
-Experimental CLI:
-
-```bash
-./build/echat-cli
+./build-test/EChatReliabilitySelfTest
 ```
 
 ## Build on Windows
 
-Use **Qt 6 for MSVC**, CMake and Visual Studio Build Tools. The release workflow downloads the official MsQuic 2.6.1 Schannel native package and uses vcpkg for libsodium.
+Use Qt 6 for MSVC, CMake and Visual Studio Build Tools. The release workflow downloads the official MsQuic 2.6.1 Schannel package and uses vcpkg for libsodium. MinGW is not supported by the current Windows Bluetooth backend.
 
-Do not use MinGW for the current Windows Bluetooth backend.
+## Status
 
-## Transport status in 0.3
+| Transport / subsystem | Status |
+|---|---|
+| Bluetooth Classic/RFCOMM | implemented |
+| LAN QUIC | implemented |
+| LAN TCP fallback | implemented |
+| signed multi-hop relay | implemented |
+| persistent sender outbox | implemented in 0.4 |
+| relay store-and-forward | implemented in 0.4 |
+| adaptive direct-link scoring | implemented in 0.4 |
+| full global path-cost routing | planned |
+| BLE/GATT discovery | planned |
+| Internet relay QUIC/WSS | planned |
+| resumable file transfer | planned |
+| Double Ratchet/session crypto | planned |
 
-| Transport | Status | Use |
-|---|---|---|
-| Bluetooth Classic/RFCOMM | implemented | primary offline messaging |
-| LAN QUIC | implemented in 0.3, pending CI/device validation | preferred LAN data |
-| LAN TCP fallback | implemented in 0.3, pending CI/device validation | UDP/QUIC compatibility fallback |
-| P2P multi-hop relay | implemented in 0.3, pending multi-device validation | bridge Bluetooth/LAN peers, direct + groups |
-| BLE/GATT | planned | discovery/presence/capability advertisement |
-| Internet relay QUIC/WSS | planned | remote communication / restrictive networks |
-| file transfer engine | planned | chunked/resumable large transfers |
-
-## Download without compiling
-
-Every push to `main` runs GitHub Actions. When both platform builds succeed, the release for the version in `CMakeLists.txt` contains:
-
-- `EChat-Windows-x64-Setup.exe`
-- `EChat-Linux-x86_64.AppImage`
-
-The experimental `echat-cli` is bundled alongside the GUI.
+Every push to `main` builds the Windows installer and Linux AppImage and publishes the prerelease when both jobs succeed.

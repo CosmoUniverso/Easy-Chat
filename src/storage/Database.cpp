@@ -47,6 +47,10 @@ void Database::migrate() {
     execOrThrow(q, "CREATE TABLE IF NOT EXISTS conversations (id TEXT PRIMARY KEY, type INTEGER NOT NULL, name TEXT, member_ids TEXT NOT NULL)");
     execOrThrow(q, "CREATE TABLE IF NOT EXISTS messages (id TEXT PRIMARY KEY, conversation_id TEXT NOT NULL, sender_id TEXT NOT NULL, text TEXT NOT NULL, timestamp_ms INTEGER NOT NULL, state TEXT NOT NULL)");
     execOrThrow(q, "CREATE TABLE IF NOT EXISTS deliveries (message_id TEXT NOT NULL, recipient_id TEXT NOT NULL, state TEXT NOT NULL, transport TEXT, PRIMARY KEY(message_id, recipient_id))");
+    execOrThrow(q, "CREATE TABLE IF NOT EXISTS outbox (id TEXT PRIMARY KEY, target_id TEXT NOT NULL, payload BLOB NOT NULL, policy INTEGER NOT NULL, kind TEXT NOT NULL, logical_id TEXT NOT NULL, created_at_ms INTEGER NOT NULL, next_attempt_ms INTEGER NOT NULL, expires_at_ms INTEGER NOT NULL, attempts INTEGER NOT NULL DEFAULT 0)");
+    execOrThrow(q, "CREATE INDEX IF NOT EXISTS idx_outbox_due ON outbox(next_attempt_ms)");
+    execOrThrow(q, "CREATE TABLE IF NOT EXISTS relay_spool (packet_id TEXT PRIMARY KEY, target_id TEXT NOT NULL, payload BLOB NOT NULL, policy INTEGER NOT NULL, created_at_ms INTEGER NOT NULL, next_attempt_ms INTEGER NOT NULL, expires_at_ms INTEGER NOT NULL, attempts INTEGER NOT NULL DEFAULT 0)");
+    execOrThrow(q, "CREATE INDEX IF NOT EXISTS idx_relay_spool_due ON relay_spool(next_attempt_ms)");
     addColumnIfMissing("identity", "sign_public_key", "BLOB");
     addColumnIfMissing("identity", "sign_secret_key", "BLOB");
     addColumnIfMissing("peers", "sign_public_key", "BLOB");
@@ -121,15 +125,50 @@ void Database::saveMessage(const Message &m, const QString &state) {
     if (!q.exec()) throw std::runtime_error(q.lastError().text().toStdString());
 }
 
+Message Database::messageById(const QString &messageId) const {
+    Message m;
+    QSqlQuery q(db_);
+    q.prepare("SELECT id,conversation_id,sender_id,text,timestamp_ms FROM messages WHERE id=?");
+    q.addBindValue(messageId);
+    if (!q.exec() || !q.next()) return m;
+    m.id=q.value(0).toString(); m.conversationId=q.value(1).toString(); m.senderId=q.value(2).toString();
+    m.text=q.value(3).toString(); m.timestampMs=q.value(4).toLongLong();
+    return m;
+}
+
 void Database::saveDelivery(const QString &messageId, const QString &recipientId, const QString &state, const QString &transport) {
     QSqlQuery q(db_); q.prepare("INSERT OR REPLACE INTO deliveries(message_id,recipient_id,state,transport) VALUES(?,?,?,?)");
     q.addBindValue(messageId); q.addBindValue(recipientId); q.addBindValue(state); q.addBindValue(transport);
     if (!q.exec()) throw std::runtime_error(q.lastError().text().toStdString());
 }
 
-void Database::updateDelivery(const QString &messageId, const QString &recipientId, const QString &state) {
-    QSqlQuery q(db_); q.prepare("UPDATE deliveries SET state=? WHERE message_id=? AND recipient_id=?");
-    q.addBindValue(state); q.addBindValue(messageId); q.addBindValue(recipientId); q.exec();
+void Database::updateDelivery(const QString &messageId, const QString &recipientId, const QString &state, const QString &transport) {
+    QSqlQuery q(db_);
+    if (transport.isEmpty()) {
+        q.prepare("UPDATE deliveries SET state=? WHERE message_id=? AND recipient_id=?");
+        q.addBindValue(state); q.addBindValue(messageId); q.addBindValue(recipientId);
+    } else {
+        q.prepare("UPDATE deliveries SET state=?, transport=? WHERE message_id=? AND recipient_id=?");
+        q.addBindValue(state); q.addBindValue(transport); q.addBindValue(messageId); q.addBindValue(recipientId);
+    }
+    q.exec();
+}
+
+QStringList Database::deliveryStates(const QString &messageId) const {
+    QStringList states;
+    QSqlQuery q(db_); q.prepare("SELECT state FROM deliveries WHERE message_id=? ORDER BY recipient_id");
+    q.addBindValue(messageId); q.exec();
+    while (q.next()) states << q.value(0).toString();
+    return states;
+}
+
+QStringList Database::pendingPeerMessageIds(const QString &recipientId, const QString &senderId) const {
+    QStringList ids;
+    QSqlQuery q(db_);
+    q.prepare("SELECT d.message_id FROM deliveries d JOIN messages m ON m.id=d.message_id WHERE d.recipient_id=? AND d.state='pending-peer' AND m.sender_id=? ORDER BY m.timestamp_ms");
+    q.addBindValue(recipientId); q.addBindValue(senderId); q.exec();
+    while (q.next()) ids << q.value(0).toString();
+    return ids;
 }
 
 bool Database::hasMessage(const QString &messageId) const {
@@ -145,6 +184,97 @@ QList<Message> Database::messages(const QString &conversationId) const {
         m.text=q.value(3).toString(); m.timestampMs=q.value(4).toLongLong(); out << m;
     }
     return out;
+}
+
+void Database::saveOutbox(const OutboxEntry &e) {
+    QSqlQuery q(db_);
+    q.prepare("INSERT OR REPLACE INTO outbox(id,target_id,payload,policy,kind,logical_id,created_at_ms,next_attempt_ms,expires_at_ms,attempts) VALUES(?,?,?,?,?,?,?,?,?,?)");
+    q.addBindValue(e.id); q.addBindValue(e.targetId); q.addBindValue(e.payload); q.addBindValue(static_cast<int>(e.policy));
+    q.addBindValue(e.kind); q.addBindValue(e.logicalId); q.addBindValue(e.createdAtMs); q.addBindValue(e.nextAttemptMs);
+    q.addBindValue(e.expiresAtMs); q.addBindValue(e.attempts);
+    if (!q.exec()) throw std::runtime_error(q.lastError().text().toStdString());
+}
+
+QList<OutboxEntry> Database::dueOutbox(qint64 nowMs, int limit) const {
+    QList<OutboxEntry> out;
+    QSqlQuery q(db_);
+    q.prepare("SELECT id,target_id,payload,policy,kind,logical_id,created_at_ms,next_attempt_ms,expires_at_ms,attempts FROM outbox WHERE next_attempt_ms<=? ORDER BY next_attempt_ms LIMIT ?");
+    q.addBindValue(nowMs); q.addBindValue(limit); q.exec();
+    while (q.next()) {
+        OutboxEntry e;
+        e.id=q.value(0).toString(); e.targetId=q.value(1).toString(); e.payload=q.value(2).toByteArray();
+        e.policy=static_cast<TransportPolicy>(q.value(3).toInt()); e.kind=q.value(4).toString(); e.logicalId=q.value(5).toString();
+        e.createdAtMs=q.value(6).toLongLong(); e.nextAttemptMs=q.value(7).toLongLong(); e.expiresAtMs=q.value(8).toLongLong(); e.attempts=q.value(9).toInt();
+        out << e;
+    }
+    return out;
+}
+
+void Database::updateOutboxRetry(const QString &id, qint64 nextAttemptMs, int attempts) {
+    QSqlQuery q(db_); q.prepare("UPDATE outbox SET next_attempt_ms=?, attempts=? WHERE id=?");
+    q.addBindValue(nextAttemptMs); q.addBindValue(attempts); q.addBindValue(id); q.exec();
+}
+
+void Database::deleteOutbox(const QString &id) {
+    QSqlQuery q(db_); q.prepare("DELETE FROM outbox WHERE id=?"); q.addBindValue(id); q.exec();
+}
+
+void Database::deleteOutboxFor(const QString &logicalId, const QString &targetId, const QString &kind) {
+    QSqlQuery q(db_); q.prepare("DELETE FROM outbox WHERE logical_id=? AND target_id=? AND kind=?");
+    q.addBindValue(logicalId); q.addBindValue(targetId); q.addBindValue(kind); q.exec();
+}
+
+int Database::outboxCount() const {
+    QSqlQuery q("SELECT COUNT(*) FROM outbox", db_); return q.next() ? q.value(0).toInt() : 0;
+}
+
+void Database::saveRelaySpool(const RelaySpoolEntry &e) {
+    QSqlQuery q(db_);
+    q.prepare("INSERT OR REPLACE INTO relay_spool(packet_id,target_id,payload,policy,created_at_ms,next_attempt_ms,expires_at_ms,attempts) VALUES(?,?,?,?,?,?,?,?)");
+    q.addBindValue(e.packetId); q.addBindValue(e.targetId); q.addBindValue(e.payload); q.addBindValue(static_cast<int>(e.policy));
+    q.addBindValue(e.createdAtMs); q.addBindValue(e.nextAttemptMs); q.addBindValue(e.expiresAtMs); q.addBindValue(e.attempts);
+    if (!q.exec()) throw std::runtime_error(q.lastError().text().toStdString());
+}
+
+QList<RelaySpoolEntry> Database::dueRelaySpool(qint64 nowMs, int limit) const {
+    QList<RelaySpoolEntry> out;
+    QSqlQuery q(db_);
+    q.prepare("SELECT packet_id,target_id,payload,policy,created_at_ms,next_attempt_ms,expires_at_ms,attempts FROM relay_spool WHERE next_attempt_ms<=? ORDER BY next_attempt_ms LIMIT ?");
+    q.addBindValue(nowMs); q.addBindValue(limit); q.exec();
+    while (q.next()) {
+        RelaySpoolEntry e;
+        e.packetId=q.value(0).toString(); e.targetId=q.value(1).toString(); e.payload=q.value(2).toByteArray();
+        e.policy=static_cast<TransportPolicy>(q.value(3).toInt()); e.createdAtMs=q.value(4).toLongLong();
+        e.nextAttemptMs=q.value(5).toLongLong(); e.expiresAtMs=q.value(6).toLongLong(); e.attempts=q.value(7).toInt();
+        out << e;
+    }
+    return out;
+}
+
+void Database::updateRelaySpoolRetry(const QString &packetId, qint64 nextAttemptMs, int attempts) {
+    QSqlQuery q(db_); q.prepare("UPDATE relay_spool SET next_attempt_ms=?, attempts=? WHERE packet_id=?");
+    q.addBindValue(nextAttemptMs); q.addBindValue(attempts); q.addBindValue(packetId); q.exec();
+}
+
+void Database::deleteRelaySpool(const QString &packetId) {
+    QSqlQuery q(db_); q.prepare("DELETE FROM relay_spool WHERE packet_id=?"); q.addBindValue(packetId); q.exec();
+}
+
+int Database::relaySpoolCount() const {
+    QSqlQuery q("SELECT COUNT(*) FROM relay_spool", db_); return q.next() ? q.value(0).toInt() : 0;
+}
+
+void Database::trimRelaySpool(int maxEntries) {
+    if (maxEntries < 1) return;
+    QSqlQuery q(db_);
+    q.prepare("DELETE FROM relay_spool WHERE packet_id IN (SELECT packet_id FROM relay_spool ORDER BY created_at_ms DESC LIMIT -1 OFFSET ?)");
+    q.addBindValue(maxEntries); q.exec();
+}
+
+void Database::deleteExpiredReliability(qint64 nowMs) {
+    QSqlQuery q(db_);
+    q.prepare("DELETE FROM outbox WHERE expires_at_ms<=?"); q.addBindValue(nowMs); q.exec();
+    q.prepare("DELETE FROM relay_spool WHERE expires_at_ms<=?"); q.addBindValue(nowMs); q.exec();
 }
 
 } // namespace ec
