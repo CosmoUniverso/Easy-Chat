@@ -181,6 +181,33 @@ void MainWindow::applyTheme() {
         #secondaryButton { background:#252a34; color:#e7ebf1; }
         #secondaryButton:hover { background:#303641; }
         #policyBox { min-width:170px; }
+
+        QDialog { background:#151820; color:#e9edf3; }
+        QDialog QLabel { background:transparent; color:#e9edf3; }
+        QDialog QLineEdit, QDialog QComboBox, QDialog QListWidget {
+            background:#222630;
+            color:#eef2f7;
+            border:1px solid #323844;
+            border-radius:9px;
+            padding:9px 11px;
+        }
+        QDialog QListWidget::item { color:#e9edf3; padding:10px; border-radius:8px; }
+        QDialog QListWidget::item:hover { background:#252b36; }
+        QDialog QListWidget::item:selected { background:#2f3850; color:#ffffff; }
+        QDialog QPushButton {
+            background:#252a34;
+            color:#f1f4f8;
+            border:1px solid #343a46;
+            border-radius:9px;
+            padding:9px 14px;
+        }
+        QDialog QPushButton:hover { background:#303641; }
+        QDialog QPushButton:default {
+            background:#5865f2;
+            color:#ffffff;
+            border-color:#5865f2;
+        }
+        QDialogButtonBox { background:transparent; }
     )");
 }
 

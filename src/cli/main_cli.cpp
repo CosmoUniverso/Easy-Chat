@@ -23,7 +23,7 @@ int main(int argc, char *argv[]) {
     QCoreApplication::setApplicationName("EC");
     const QString legacyDataDir=QStandardPaths::writableLocation(QStandardPaths::AppLocalDataLocation);
     QCoreApplication::setApplicationName("EChat");
-    QCoreApplication::setApplicationVersion("0.3.0-experimental");
+    QCoreApplication::setApplicationVersion("0.3.1-experimental");
 
     try {
         const QString dataDir=QStandardPaths::writableLocation(QStandardPaths::AppLocalDataLocation);

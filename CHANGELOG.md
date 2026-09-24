@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.3.1
+
+- Fixed unreadable light popup/dialog backgrounds with light text on Linux/Fedora.
+- Added a global Fusion dark palette before the first input dialog is shown.
+- Added explicit dark styling for QDialog, QInputDialog, QMessageBox, dialog lists, inputs and standard buttons.
+- Kept the existing EChat dark palette and accent colors consistent across the main window and modal dialogs.
+
 ## 0.3.0
 
 - Bumped wire protocol to **v3**.
