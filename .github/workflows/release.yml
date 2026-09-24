@@ -99,6 +99,12 @@ jobs:
           chmod +x tools/*.AppImage
           export PATH="$PWD/tools:$PATH"
           export QMAKE="$(command -v qmake6 || command -v qmake)"
+
+          # Qt ships optional SQL drivers that may depend on proprietary DB client
+          # libraries not present on the runner. EChat only needs SQLite, so remove
+          # Mimer's plugin before linuxdeploy scans all Qt SQL drivers.
+          find "${QT_ROOT_DIR:-$PWD/Qt}" -type f -name 'libqsqlmimer.so' -print -delete || true
+
           tools/linuxdeploy-x86_64.AppImage \
             --appdir AppDir \
             --executable build/EChat \
