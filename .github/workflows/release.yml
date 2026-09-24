@@ -13,7 +13,12 @@ jobs:
     name: Windows x64 installer
     runs-on: windows-2025
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
+
+      - name: Enable MSVC x64 environment
+        uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: x64
 
       - name: Install Qt 6.8.3
         uses: jurplel/install-qt-action@v4
@@ -28,6 +33,7 @@ jobs:
         run: |
           cmake -S . -B build -G Ninja `
             -DCMAKE_BUILD_TYPE=Release `
+            -DCMAKE_CXX_COMPILER=cl `
             -DCMAKE_TOOLCHAIN_FILE="$env:VCPKG_INSTALLATION_ROOT/scripts/buildsystems/vcpkg.cmake" `
             -DVCPKG_TARGET_TRIPLET=x64-windows
 
@@ -47,8 +53,10 @@ jobs:
         shell: pwsh
         run: |
           choco install nsis -y --no-progress
-          & "C:\\Program Files (x86)\\NSIS\\makensis.exe" packaging/windows/EChat.nsi
           New-Item -ItemType Directory -Force release-assets | Out-Null
+          Push-Location packaging/windows
+          & "C:\\Program Files (x86)\\NSIS\\makensis.exe" EChat.nsi
+          Pop-Location
           Move-Item packaging/windows/EChat-Windows-x64-Setup.exe release-assets/EChat-Windows-x64-Setup.exe
 
       - uses: actions/upload-artifact@v4
@@ -61,7 +69,7 @@ jobs:
     name: Linux x86_64 AppImage
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Install system dependencies
         run: |
@@ -116,7 +124,7 @@ jobs:
     runs-on: ubuntu-24.04
     needs: [windows, linux]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Read version
         id: version

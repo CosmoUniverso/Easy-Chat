@@ -2,6 +2,7 @@
 
 #include <QDataStream>
 #include <QJsonDocument>
+#include <QIODevice>
 #include <sodium.h>
 
 namespace ec::protocol {
