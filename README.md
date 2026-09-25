@@ -1,6 +1,19 @@
 # EChat — Easy Chat
 
-EChat 0.5 is an offline-first desktop messenger prototype for **Windows 10/11 and Linux/Fedora**. It combines Bluetooth Classic/RFCOMM, LAN QUIC/TCP, end-to-end encrypted multi-hop relay and persistent retry/store-and-forward for intermittent networks.
+EChat 0.6.0 is an offline-first desktop messenger prototype for **Windows 10/11 and Linux/Fedora**. It combines Bluetooth Classic/RFCOMM, LAN QUIC/TCP, end-to-end encrypted multi-hop relay and persistent retry/store-and-forward for intermittent networks.
+
+
+### 0.6.0 Stealth / compact desktop mode
+
+- `Stealth` button in the active chat header.
+- `Ctrl+Shift+S` toggles the compact view; `Esc` returns to the full window.
+- Small always-on-top popup with the current conversation name, the last three message previews and a compact composer.
+- The full EChat window is hidden while compact mode is active, reducing desktop footprint without changing network visibility or protocol behavior.
+- Uses the same selected transport policy, E2EE path, outbox, ACK and retry logic as the normal interface.
+
+### 0.5.1 reliability fix
+
+Pending messages no longer remain pinned forever to an obsolete `Solo Bluetooth` / `Solo LAN` / `Solo Internet` selection. Changing the route policy for the current conversation, or sending another message with a different policy, updates older queued message/control envelopes and retries them immediately on the newly allowed route.
 
 ## 0.5 implemented
 

@@ -20,6 +20,8 @@
 #include <QTextBrowser>
 #include <QUrl>
 #include <QScrollBar>
+#include <QShortcut>
+#include <QKeySequence>
 #include <algorithm>
 #include <QVBoxLayout>
 
@@ -101,7 +103,10 @@ MainWindow::MainWindow(const LocalIdentity &identity, CryptoEngine &crypto, Peer
     groupManageButton_ = new QPushButton(QStringLiteral("Gestisci gruppo"));
     groupManageButton_->setObjectName("headerActionButton");
     groupManageButton_->setVisible(false);
-    titleRow->addWidget(conversationTitle_); titleRow->addStretch(); titleRow->addWidget(groupManageButton_); titleRow->addWidget(policyBox_);
+    auto *stealthButton = new QPushButton(QStringLiteral("Stealth"));
+    stealthButton->setObjectName("headerActionButton");
+    stealthButton->setToolTip(QStringLiteral("Modalita' compatta · Ctrl+Shift+S"));
+    titleRow->addWidget(conversationTitle_); titleRow->addStretch(); titleRow->addWidget(groupManageButton_); titleRow->addWidget(stealthButton); titleRow->addWidget(policyBox_);
     routeLabel_ = new QLabel(QStringLiteral("Nessuna route")); routeLabel_->setObjectName("routeLabel");
     securityLabel_ = new QLabel(QStringLiteral("E2EE v2 · Ed25519 + X25519 + XChaCha20-Poly1305"));
     securityLabel_->setObjectName("securityLabel");
@@ -136,11 +141,18 @@ MainWindow::MainWindow(const LocalIdentity &identity, CryptoEngine &crypto, Peer
 
     connect(scanButton, &QPushButton::clicked, this, &MainWindow::openBluetoothScanner);
     connect(accountButton, &QPushButton::clicked, this, &MainWindow::openAccountSettings);
+    connect(stealthButton, &QPushButton::clicked, this, &MainWindow::openStealthMode);
+    auto *stealthShortcut = new QShortcut(QKeySequence(QStringLiteral("Ctrl+Shift+S")), this);
+    connect(stealthShortcut, &QShortcut::activated, this, &MainWindow::openStealthMode);
     connect(groupManageButton_, &QPushButton::clicked, this, &MainWindow::manageCurrentGroup);
     connect(groupButton, &QPushButton::clicked, this, &MainWindow::createGroup);
     connect(newChatButton, &QPushButton::clicked, this, &MainWindow::createDirectChat);
     connect(searchEdit_, &QLineEdit::textChanged, this, [this] { refreshConversations(); });
-    connect(policyBox_, &QComboBox::currentIndexChanged, this, [this] { refreshRouteStatus(); });
+    connect(policyBox_, &QComboBox::currentIndexChanged, this, [this] {
+        refreshRouteStatus();
+        if (!currentConversationId_.isEmpty())
+            conversations_.retryQueuedMessages(currentConversationId_, selectedPolicy());
+    });
     connect(sendButton, &QPushButton::clicked, this, [this] {
         if (currentConversationId_.isEmpty()) return;
         const QString text = messageEdit_->text().trimmed();
@@ -162,10 +174,11 @@ MainWindow::MainWindow(const LocalIdentity &identity, CryptoEngine &crypto, Peer
         if (c.id == currentConversationId_) { refreshHeader(); refreshRouteStatus(); }
     });
     connect(&conversations_, &ConversationManager::messageAdded, this, [this](const Message &m) {
-        refreshConversations(); if (m.conversationId == currentConversationId_) refreshMessages();
+        refreshConversations();
+        if (m.conversationId == currentConversationId_) { refreshMessages(); refreshStealthMode(); }
     });
     connect(&conversations_, &ConversationManager::messageRemoved, this, [this](const QString &conversationId, const QString &) {
-        if (conversationId == currentConversationId_) refreshMessages();
+        if (conversationId == currentConversationId_) { refreshMessages(); refreshStealthMode(); }
         refreshRouteStatus();
     });
     connect(&conversations_, &ConversationManager::localUsernameChanged, this, [this](const QString &username) {
@@ -179,10 +192,10 @@ MainWindow::MainWindow(const LocalIdentity &identity, CryptoEngine &crypto, Peer
     });
     connect(&transports_, &TransportManager::statusMessage, statusLabel_, &QLabel::setText);
     connect(&conversations_, &ConversationManager::deliveryInfo, this, [this](const QString &, const QString &info) {
-        statusLabel_->setText(info); refreshMessages(); refreshRouteStatus();
+        statusLabel_->setText(info); refreshMessages(); refreshStealthMode(); refreshRouteStatus();
     });
     connect(&conversations_, &ConversationManager::reliabilityStateChanged, this, [this] {
-        refreshMessages(); refreshRouteStatus();
+        refreshMessages(); refreshStealthMode(); refreshRouteStatus();
     });
     connect(&conversations_, &ConversationManager::protocolError, this, [this](const QString &error) { statusLabel_->setText(error); });
     connect(&bluetooth_, &BluetoothTransport::connectionChanged, this, [this](const QString &, bool) { refreshRouteStatus(); });
@@ -214,6 +227,11 @@ void MainWindow::applyTheme() {
         #secondaryButton, #headerActionButton { background:#252a34; color:#e7ebf1; }
         #secondaryButton:hover, #headerActionButton:hover { background:#303641; }
         #headerActionButton { padding:7px 10px; font-size:12px; }
+        #stealthRoot { background:#111318; border:1px solid #303641; }
+        #stealthTitle { color:#cdd4df; font-size:12px; font-weight:700; }
+        #stealthMessages { background:#151820; color:#e9edf3; border:1px solid #292e38; border-radius:8px; padding:6px; }
+        #stealthExpand { background:#252a34; color:#e7ebf1; min-width:34px; max-width:34px; padding:8px 0; }
+        #stealthExpand:hover { background:#303641; }
         #policyBox { min-width:170px; }
 
         QDialog { background:#151820; color:#e9edf3; }
@@ -264,7 +282,7 @@ void MainWindow::refreshConversations() {
 }
 
 void MainWindow::selectConversation(const QString &id) {
-    currentConversationId_=id; refreshHeader(); refreshMessages(); refreshRouteStatus(); messageEdit_->setFocus();
+    currentConversationId_=id; refreshHeader(); refreshMessages(); refreshStealthMode(); refreshRouteStatus(); messageEdit_->setFocus();
 }
 
 void MainWindow::refreshHeader() {
@@ -327,6 +345,116 @@ void MainWindow::refreshRouteStatus() {
     }
     routeLabel_->setText(QStringLiteral("Bluetooth %1/%5   ·   LAN %2/%5   ·   Internet %3/%5   ·   Relay P2P %4/%5   ·   policy: %6   ·   %7")
                          .arg(bt).arg(lan).arg(net).arg(mesh).arg(recipients).arg(policyBox_->currentText()).arg(conversations_.reliabilitySummary()));
+}
+
+void MainWindow::openStealthMode() {
+    if (currentConversationId_.isEmpty()) {
+        QMessageBox::information(this, QStringLiteral("EChat"),
+                                 QStringLiteral("Seleziona prima una conversazione da usare in modalita' Stealth."));
+        return;
+    }
+
+    if (!stealthDialog_) {
+        stealthDialog_ = new QDialog(nullptr, Qt::Tool | Qt::WindowStaysOnTopHint);
+        stealthDialog_->setWindowTitle(QStringLiteral("EChat Stealth"));
+        stealthDialog_->setObjectName(QStringLiteral("stealthRoot"));
+        stealthDialog_->setModal(false);
+        stealthDialog_->resize(520, 190);
+        stealthDialog_->setMinimumSize(380, 145);
+        stealthDialog_->setStyleSheet(styleSheet());
+
+        auto *layout = new QVBoxLayout(stealthDialog_);
+        layout->setContentsMargins(10, 9, 10, 10);
+        layout->setSpacing(7);
+
+        auto *top = new QHBoxLayout;
+        stealthTitle_ = new QLabel;
+        stealthTitle_->setObjectName(QStringLiteral("stealthTitle"));
+        auto *expandButton = new QPushButton(QStringLiteral("↗"));
+        expandButton->setObjectName(QStringLiteral("stealthExpand"));
+        expandButton->setToolTip(QStringLiteral("Torna alla finestra completa"));
+        top->addWidget(stealthTitle_, 1);
+        top->addWidget(expandButton);
+        layout->addLayout(top);
+
+        stealthMessages_ = new QTextBrowser;
+        stealthMessages_->setObjectName(QStringLiteral("stealthMessages"));
+        stealthMessages_->setOpenLinks(false);
+        stealthMessages_->setOpenExternalLinks(false);
+        stealthMessages_->setMinimumHeight(68);
+        stealthMessages_->setMaximumHeight(88);
+        layout->addWidget(stealthMessages_, 1);
+
+        auto *composer = new QHBoxLayout;
+        stealthMessageEdit_ = new QLineEdit;
+        stealthMessageEdit_->setPlaceholderText(QStringLiteral("Scrivi..."));
+        stealthMessageEdit_->setObjectName(QStringLiteral("messageEdit"));
+        auto *sendButton = new QPushButton(QStringLiteral("Invia"));
+        sendButton->setObjectName(QStringLiteral("sendButton"));
+        composer->addWidget(stealthMessageEdit_, 1);
+        composer->addWidget(sendButton);
+        layout->addLayout(composer);
+
+        auto sendCompact = [this] {
+            if (currentConversationId_.isEmpty() || !stealthMessageEdit_) return;
+            const QString text = stealthMessageEdit_->text().trimmed();
+            if (text.isEmpty()) return;
+            conversations_.sendMessage(currentConversationId_, text, selectedPolicy());
+            stealthMessageEdit_->clear();
+            refreshMessages();
+            refreshStealthMode();
+        };
+        connect(sendButton, &QPushButton::clicked, stealthDialog_, sendCompact);
+        connect(stealthMessageEdit_, &QLineEdit::returnPressed, stealthDialog_, sendCompact);
+        connect(expandButton, &QPushButton::clicked, stealthDialog_, [this] { stealthDialog_->reject(); });
+        connect(stealthDialog_, &QDialog::rejected, this, [this] {
+            showNormal();
+            raise();
+            activateWindow();
+            if (messageEdit_) messageEdit_->setFocus();
+        });
+
+        auto *exitShortcut = new QShortcut(QKeySequence(Qt::Key_Escape), stealthDialog_);
+        connect(exitShortcut, &QShortcut::activated, stealthDialog_, &QDialog::reject);
+        auto *toggleShortcut = new QShortcut(QKeySequence(QStringLiteral("Ctrl+Shift+S")), stealthDialog_);
+        connect(toggleShortcut, &QShortcut::activated, stealthDialog_, &QDialog::reject);
+        connect(this, &QObject::destroyed, stealthDialog_, &QObject::deleteLater);
+    }
+
+    refreshStealthMode();
+    hide();
+    stealthDialog_->show();
+    stealthDialog_->raise();
+    stealthDialog_->activateWindow();
+    if (stealthMessageEdit_) stealthMessageEdit_->setFocus();
+}
+
+void MainWindow::refreshStealthMode() {
+    if (!stealthDialog_ || !stealthMessages_ || !stealthTitle_ || currentConversationId_.isEmpty()) return;
+    const Conversation c = conversations_.conversation(currentConversationId_);
+    const QString name = c.type == ConversationType::Group ? QStringLiteral("# %1").arg(c.name) : c.name;
+    stealthTitle_->setText(QStringLiteral("EChat · %1").arg(name.isEmpty() ? QStringLiteral("chat") : name));
+
+    const auto all = conversations_.messages(currentConversationId_);
+    QString html = QStringLiteral("<html><body style='font-family:sans-serif;background:#151820;color:#e9edf3;margin:2px;'>");
+    const int first = qMax(0, all.size() - 3);
+    for (int i = first; i < all.size(); ++i) {
+        const auto &m = all.at(i);
+        const bool mine = m.senderId == identity_.userId;
+        QString sender = mine ? QStringLiteral("Tu") : m.senderId;
+        if (peers_.hasPeer(m.senderId)) sender = peers_.peer(m.senderId).username;
+        QString body = m.text.simplified();
+        if (body.size() > 150) body = body.left(147) + QStringLiteral("...");
+        const QString time = QDateTime::fromMSecsSinceEpoch(m.timestampMs).toLocalTime().toString(QStringLiteral("HH:mm"));
+        html += QStringLiteral("<div style='margin:2px 1px;white-space:nowrap;overflow:hidden;'>"
+                               "<span style='color:#9ca6b5;font-size:10px;'>%1 · %2</span> "
+                               "<span style='font-size:12px;'><b>%3</b> %4</span></div>")
+                    .arg(time.toHtmlEscaped(), sender.toHtmlEscaped(), mine ? QStringLiteral("→") : QStringLiteral("←"), body.toHtmlEscaped());
+    }
+    if (all.isEmpty()) html += QStringLiteral("<div style='color:#9ca6b5;font-size:12px;'>Nessun messaggio ancora.</div>");
+    html += QStringLiteral("</body></html>");
+    stealthMessages_->setHtml(html);
+    stealthMessages_->verticalScrollBar()->setValue(stealthMessages_->verticalScrollBar()->maximum());
 }
 
 void MainWindow::openBluetoothScanner() {

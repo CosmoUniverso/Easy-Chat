@@ -1,4 +1,8 @@
-# EChat 0.5 architecture
+# EChat 0.6.0 architecture
+
+## Queued-policy rebinding
+
+The sender outbox stores the policy used at enqueue time, but that value is no longer immutable. When the user changes the active conversation policy, EChat scans queued encrypted `message` envelopes for that conversation, rewrites their routing policy, resets retry backoff and makes them immediately due. Sending a new message performs the same rebind first, so older queued messages cannot remain stranded on a stale `BluetoothOnly`, `LanOnly` or `InternetOnly` choice while newer messages use another route. ACK outbox entries remain `Auto`.
 
 ```text
                               EChat Core

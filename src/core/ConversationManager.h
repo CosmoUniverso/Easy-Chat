@@ -33,6 +33,8 @@ public:
     bool deleteOwnMessage(const QString &messageId,
                           TransportPolicy policy = TransportPolicy::Auto);
     bool changeUsername(const QString &username);
+    void retryQueuedMessages(const QString &conversationId,
+                             TransportPolicy policy = TransportPolicy::Auto);
     bool relayPossible(const QString &targetPeerId,
                        TransportPolicy policy = TransportPolicy::Auto) const;
     QString deliveryIndicator(const QString &messageId) const;
@@ -67,6 +69,7 @@ private:
 
     void queueOutbound(const QString &targetId, const QJsonObject &object, TransportPolicy policy,
                        const QString &kind, const QString &logicalId, qint64 firstAttemptMs);
+    bool adoptPolicyForQueuedMessages(const QString &conversationId, TransportPolicy policy, qint64 nowMs);
     void retryPersistentQueues();
     void retryOutbox();
     void retryRelaySpool();

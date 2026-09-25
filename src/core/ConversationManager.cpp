@@ -279,6 +279,17 @@ bool ConversationManager::sendControlMessage(const Message &message, const QStri
 
 bool ConversationManager::sendMessage(const QString &conversationId, const QString &text, TransportPolicy policy) {
     if (!conversations_.contains(conversationId) || text.trimmed().isEmpty()) return false;
+
+    // A newly selected routing policy applies to already queued E2EE messages in
+    // this conversation too. Otherwise an old BluetoothOnly/LanOnly choice can
+    // strand older messages while newer messages use the newly selected route.
+    const qint64 now = QDateTime::currentMSecsSinceEpoch();
+    const bool wokeQueuedMessages = adoptPolicyForQueuedMessages(conversationId, policy, now);
+    if (wokeQueuedMessages) {
+        emit reliabilityStateChanged();
+        QTimer::singleShot(0, this, &ConversationManager::retryPersistentQueues);
+    }
+
     const Conversation c = conversations_.value(conversationId);
     Message m;
     m.id = QUuid::createUuid().toString(QUuid::WithoutBraces);
@@ -294,7 +305,6 @@ bool ConversationManager::sendMessage(const QString &conversationId, const QStri
     emit messageAdded(m);
 
     bool accepted = false;
-    const qint64 now = QDateTime::currentMSecsSinceEpoch();
     for (const QString &recipientId : c.memberIds) {
         if (recipientId == identity_.userId) continue;
         accepted = true;
@@ -679,6 +689,32 @@ void ConversationManager::materializePendingPeerDeliveries(const QString &peerId
             emit protocolError(QString::fromUtf8(e.what()));
         }
     }
+}
+
+bool ConversationManager::adoptPolicyForQueuedMessages(const QString &conversationId,
+                                                        TransportPolicy policy, qint64 nowMs) {
+    if (conversationId.isEmpty()) return false;
+    bool changed = false;
+    for (const auto &entry : db_.outboxEntries()) {
+        // ACKs use Auto deliberately; only encrypted message/control envelopes
+        // inherit the conversation's newly selected transport policy.
+        if (entry.kind != QStringLiteral("message")) continue;
+        const QJsonObject object = objectFromBytes(entry.payload);
+        if (object.isEmpty() || object.value("type").toString() != QStringLiteral("message")) continue;
+        if (object.value("conversationId").toString() != conversationId) continue;
+        db_.updateOutboxPolicy(entry.id, policy, nowMs, 0);
+        changed = true;
+    }
+    return changed;
+}
+
+void ConversationManager::retryQueuedMessages(const QString &conversationId, TransportPolicy policy) {
+    if (!conversations_.contains(conversationId)) return;
+    const qint64 now = QDateTime::currentMSecsSinceEpoch();
+    if (!adoptPolicyForQueuedMessages(conversationId, policy, now)) return;
+    emit reliabilityStateChanged();
+    // Run after the UI signal/ongoing send returns, avoiding nested retry loops.
+    QTimer::singleShot(0, this, &ConversationManager::retryPersistentQueues);
 }
 
 void ConversationManager::retryPersistentQueues() {

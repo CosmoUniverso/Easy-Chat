@@ -32,6 +32,16 @@ int main(int argc, char **argv) {
         std::cerr << "outbox retry schedule failed\n";
         return 3;
     }
+    db.updateOutboxPolicy(out.id, ec::TransportPolicy::LanOnly, 120, 0);
+    const auto rebound = db.dueOutbox(120);
+    if (rebound.size() != 1 || rebound.first().policy != ec::TransportPolicy::LanOnly || rebound.first().attempts != 0) {
+        std::cerr << "outbox policy rebind failed\n";
+        return 11;
+    }
+    if (db.outboxEntries().size() != 1) {
+        std::cerr << "outbox enumeration failed\n";
+        return 12;
+    }
     db.deleteOutboxFor("m1", "bob", "message");
     if (db.outboxCount() != 0) {
         std::cerr << "outbox delete failed\n";

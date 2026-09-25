@@ -246,9 +246,29 @@ QList<OutboxEntry> Database::dueOutbox(qint64 nowMs, int limit) const {
     return out;
 }
 
+QList<OutboxEntry> Database::outboxEntries() const {
+    QList<OutboxEntry> out;
+    QSqlQuery q("SELECT id,target_id,payload,policy,kind,logical_id,created_at_ms,next_attempt_ms,expires_at_ms,attempts FROM outbox ORDER BY created_at_ms,id", db_);
+    while (q.next()) {
+        OutboxEntry e;
+        e.id=q.value(0).toString(); e.targetId=q.value(1).toString(); e.payload=q.value(2).toByteArray();
+        e.policy=static_cast<TransportPolicy>(q.value(3).toInt()); e.kind=q.value(4).toString(); e.logicalId=q.value(5).toString();
+        e.createdAtMs=q.value(6).toLongLong(); e.nextAttemptMs=q.value(7).toLongLong(); e.expiresAtMs=q.value(8).toLongLong(); e.attempts=q.value(9).toInt();
+        out << e;
+    }
+    return out;
+}
+
 void Database::updateOutboxRetry(const QString &id, qint64 nextAttemptMs, int attempts) {
     QSqlQuery q(db_); q.prepare("UPDATE outbox SET next_attempt_ms=?, attempts=? WHERE id=?");
     q.addBindValue(nextAttemptMs); q.addBindValue(attempts); q.addBindValue(id); q.exec();
+}
+
+void Database::updateOutboxPolicy(const QString &id, TransportPolicy policy, qint64 nextAttemptMs, int attempts) {
+    QSqlQuery q(db_);
+    q.prepare("UPDATE outbox SET policy=?, next_attempt_ms=?, attempts=? WHERE id=?");
+    q.addBindValue(static_cast<int>(policy)); q.addBindValue(nextAttemptMs); q.addBindValue(attempts); q.addBindValue(id);
+    if (!q.exec()) throw std::runtime_error(q.lastError().text().toStdString());
 }
 
 void Database::deleteOutbox(const QString &id) {

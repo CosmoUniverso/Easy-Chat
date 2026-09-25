@@ -9,6 +9,7 @@ class QLineEdit;
 class QListWidget;
 class QTextBrowser;
 class QPushButton;
+class QDialog;
 
 namespace ec {
 class BluetoothTransport;
@@ -41,6 +42,8 @@ private:
     void manageCurrentGroup();
     void openAccountSettings();
     void deleteMessageFromLink(const QString &messageId);
+    void openStealthMode();
+    void refreshStealthMode();
     TransportPolicy selectedPolicy() const;
 
     LocalIdentity identity_;
@@ -62,6 +65,10 @@ private:
     QLabel *conversationTitle_ = nullptr;
     QLabel *userLabel_ = nullptr;
     QPushButton *groupManageButton_ = nullptr;
+    QDialog *stealthDialog_ = nullptr;
+    QLabel *stealthTitle_ = nullptr;
+    QTextBrowser *stealthMessages_ = nullptr;
+    QLineEdit *stealthMessageEdit_ = nullptr;
 };
 
 } // namespace ec

@@ -38,7 +38,9 @@ public:
 
     void saveOutbox(const OutboxEntry &entry);
     QList<OutboxEntry> dueOutbox(qint64 nowMs, int limit = 64) const;
+    QList<OutboxEntry> outboxEntries() const;
     void updateOutboxRetry(const QString &id, qint64 nextAttemptMs, int attempts);
+    void updateOutboxPolicy(const QString &id, TransportPolicy policy, qint64 nextAttemptMs, int attempts = 0);
     void deleteOutbox(const QString &id);
     void deleteOutboxFor(const QString &logicalId, const QString &targetId, const QString &kind);
     int outboxCount() const;

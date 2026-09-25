@@ -181,21 +181,20 @@ jobs:
           body: |
             EChat ${{ steps.version.outputs.version }} pre-alpha.
 
-            0.5 messaging and group-management update:
-            - delete-for-everyone for messages authored by the local account
-            - persistent deletion tombstones to prevent late-message resurrection
-            - add known peers to existing groups and rename groups
-            - encrypted group metadata control messages with persistent retry/ACK
-            - change local username without rotating identity keys or fingerprint
-            - direct chats refresh peer display names after signed identity updates
-            - persistent outbox, store-and-forward, adaptive routing and multi-hop relay from 0.4
+            0.6 desktop UX update:
+            - compact Stealth mode reduces the desktop footprint without changing network visibility
+            - small always-on-top popup with the current chat, recent-message preview and composer
+            - Ctrl+Shift+S toggles Stealth mode; Esc or the expand button returns to the full window
+            - Stealth uses the same selected transport policy, E2EE, ACK and persistent retry logic
+            - queued-message policy rebinding fix from 0.5.1 is retained
+            - delete-for-everyone, group management and username changes from 0.5 are retained
 
             Ready-to-run downloads:
             - Windows 10/11 x64: `EChat-Windows-x64-Setup.exe`
             - Linux/Fedora x86_64: `EChat-Linux-x86_64.AppImage`
 
             The console client is experimental and is bundled with both packages.
-            Messaging/group controls in 0.5 are pre-alpha and should be validated across multiple devices, especially delayed delete/group-update delivery. Protocol v4 requires all participating peers to run 0.5. Crypto v2 is not a Double Ratchet and is not recommended for high-risk communications.
+            Messaging/group controls and Stealth mode remain pre-alpha. 0.6 keeps protocol v4 and is wire-compatible with 0.5.x; Stealth is a local UI feature only. Crypto v2 is not a Double Ratchet and is not recommended for high-risk communications.
           prerelease: true
           make_latest: false
           overwrite_files: true

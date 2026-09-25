@@ -1,5 +1,22 @@
 # Changelog
 
+## 0.6.0
+
+- Added **Stealth/compact desktop mode**: a small always-on-top popup that shows only the current chat, a short recent-message preview, and the composer.
+- Added `Ctrl+Shift+S` to enter/leave Stealth mode; `Esc` also expands back to the full window.
+- Stealth mode uses the currently selected transport policy and keeps delivery/retry behavior identical to the full UI.
+- Recent-message preview updates live for incoming, outgoing, deleted and delivery-state changes.
+- Kept the v0.5.1 queued-message policy rebinding fix and wire protocol v4.
+
+## 0.5.1
+
+- Fixed queued messages remaining permanently tied to the transport policy that was active when they were first created.
+- Changing a conversation policy now rebinds its pending encrypted message/control envelopes to the new policy and wakes the retry queue immediately.
+- Sending a new message also reapplies the selected policy to older queued messages in the same conversation, preventing a stale `BluetoothOnly`/`LanOnly` route from stranding them.
+- Policy changes reset retry backoff for affected queued items so a newly available route is attempted immediately.
+- ACK packets remain transport-agnostic and continue to use `Auto`.
+- Added reliability self-test coverage for outbox policy rebinding/enumeration.
+
 ## 0.5.0
 
 - Bumped wire protocol to **v4** and QUIC ALPN to `echat-v4`.
