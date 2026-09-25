@@ -181,20 +181,21 @@ jobs:
           body: |
             EChat ${{ steps.version.outputs.version }} pre-alpha.
 
-            0.4 reliability update:
-            - persistent encrypted sender outbox with end-to-end ACK retries
-            - persistent relay store-and-forward across temporary disconnections
-            - adaptive direct transport scoring using QUIC RTT plus transport cost
-            - automatic retry when a previously unknown peer identity becomes available
-            - delivery indicators and queue/spool diagnostics in the GUI
-            - Bluetooth Classic/RFCOMM, LAN QUIC/TCP and signed multi-hop relay from 0.3
+            0.5 messaging and group-management update:
+            - delete-for-everyone for messages authored by the local account
+            - persistent deletion tombstones to prevent late-message resurrection
+            - add known peers to existing groups and rename groups
+            - encrypted group metadata control messages with persistent retry/ACK
+            - change local username without rotating identity keys or fingerprint
+            - direct chats refresh peer display names after signed identity updates
+            - persistent outbox, store-and-forward, adaptive routing and multi-hop relay from 0.4
 
             Ready-to-run downloads:
             - Windows 10/11 x64: `EChat-Windows-x64-Setup.exe`
             - Linux/Fedora x86_64: `EChat-Linux-x86_64.AppImage`
 
             The console client is experimental and is bundled with both packages.
-            Reliability/mesh in 0.4 is pre-alpha and still needs multi-device interruption/reconnect validation. Crypto v2 is not a Double Ratchet and is not recommended for high-risk communications.
+            Messaging/group controls in 0.5 are pre-alpha and should be validated across multiple devices, especially delayed delete/group-update delivery. Protocol v4 requires all participating peers to run 0.5. Crypto v2 is not a Double Ratchet and is not recommended for high-risk communications.
           prerelease: true
           make_latest: false
           overwrite_files: true

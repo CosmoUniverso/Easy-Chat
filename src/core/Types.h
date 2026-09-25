@@ -63,6 +63,7 @@ struct Conversation {
     ConversationType type = ConversationType::Direct;
     QString name;
     QStringList memberIds;
+    qint64 updatedAtMs = 0;
 };
 
 struct Message {
@@ -70,6 +71,8 @@ struct Message {
     QString conversationId;
     QString senderId;
     QString text;
+    QString kind = QStringLiteral("text");
+    QString targetMessageId;
     qint64 timestampMs = 0;
     ConversationType conversationType = ConversationType::Direct;
     QString conversationName;

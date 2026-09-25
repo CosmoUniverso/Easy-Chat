@@ -25,7 +25,7 @@ public:
     QString linkDescription(const Peer &peer) const override;
     int linkCost(const Peer &peer) const override;
 
-    void setIdentity(const LocalIdentity &identity);
+    void setIdentity(const LocalIdentity &identity) override;
 
 signals:
     void connectionChanged(const QString &host, bool connected);

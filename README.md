@@ -1,8 +1,8 @@
 # EChat — Easy Chat
 
-EChat 0.4 is an offline-first desktop messenger prototype for **Windows 10/11 and Linux/Fedora**. It combines Bluetooth Classic/RFCOMM, LAN QUIC/TCP, end-to-end encrypted multi-hop relay and persistent retry/store-and-forward for intermittent networks.
+EChat 0.5 is an offline-first desktop messenger prototype for **Windows 10/11 and Linux/Fedora**. It combines Bluetooth Classic/RFCOMM, LAN QUIC/TCP, end-to-end encrypted multi-hop relay and persistent retry/store-and-forward for intermittent networks.
 
-## 0.4 implemented
+## 0.5 implemented
 
 - Desktop GUI plus experimental `echat-cli`.
 - Direct chats and groups share the same conversation/message model.
@@ -18,6 +18,10 @@ EChat 0.4 is an offline-first desktop messenger prototype for **Windows 10/11 an
 - Unknown-recipient delivery is materialized automatically after that peer's signed identity becomes known.
 - **Adaptive direct transport scoring**: Auto mode uses current link cost instead of a fixed Bluetooth-first order. QUIC RTT participates in the LAN score.
 - Delivery indicators (`…`, `✓`, `✓✓`) and queue/spool diagnostics in the GUI.
+- **Delete for everyone** for messages sent by the local account. Deletions are E2EE control messages with persistent retry and tombstones to suppress late duplicates.
+- **Live group management**: add already-known peers to an existing group and rename the group. Updates are sent as recipient-specific encrypted control messages.
+  - In 0.5 there is not yet an admin/role model: every current group member may add known peers or rename the group. Member removal/expulsion is not implemented yet.
+- **Account settings**: change the local username without rotating the User ID, identity keys or fingerprint; the signed identity announcement propagates the new display name.
 - Signed HELLO and ACK frames, fingerprints and TOFU identity-key change protection.
 
 ## Intermittent bridge example
@@ -50,7 +54,7 @@ QUIC supplies reliable streams, TLS 1.3 transport protection, congestion control
 
 The TCP fallback is raw TCP carrying the same **application-level E2EE frames**. An Internet relay with QUIC plus WSS/TCP 443 fallback is still future work.
 
-## Adaptive routing in 0.4
+## Adaptive routing
 
 EChat separates peer capability, live reachability and user policy. `Auto` now scores available direct transports rather than using a fixed order.
 
@@ -85,7 +89,7 @@ For intermediate relays:
 
 Current defaults are seven days for sender outbox entries, 24 hours for relay-spool custody, a maximum of 256 stored relay packets, and retry delays capped at 60 seconds.
 
-## Cryptography v2 + mesh protocol v3
+## Cryptography v2 + mesh protocol v4
 
 Message encryption remains crypto v2:
 
@@ -97,7 +101,7 @@ Message encryption remains crypto v2:
 
 The same encrypted envelope may be retransmitted while waiting for its ACK; retries do not re-encrypt the message or expose plaintext to relay nodes.
 
-Protocol v3 relay metadata remains origin-signed. EChat 0.4 does **not** introduce a wire-protocol break relative to 0.3.
+Protocol v4 keeps origin-signed relay metadata and adds encrypted control-message semantics for message deletion and group metadata updates. Because 0.5 bumps the wire protocol, all peers participating in a 0.5 mesh should run EChat 0.5.
 
 ### Security boundary
 
@@ -146,9 +150,12 @@ Use Qt 6 for MSVC, CMake and Visual Studio Build Tools. The release workflow dow
 | LAN QUIC | implemented |
 | LAN TCP fallback | implemented |
 | signed multi-hop relay | implemented |
-| persistent sender outbox | implemented in 0.4 |
-| relay store-and-forward | implemented in 0.4 |
-| adaptive direct-link scoring | implemented in 0.4 |
+| persistent sender outbox | implemented |
+| relay store-and-forward | implemented |
+| adaptive direct-link scoring | implemented |
+| delete own messages for everyone | implemented in 0.5 |
+| add members / rename existing groups | implemented in 0.5 |
+| change local username | implemented in 0.5 |
 | full global path-cost routing | planned |
 | BLE/GATT discovery | planned |
 | Internet relay QUIC/WSS | planned |

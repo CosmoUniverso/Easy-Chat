@@ -29,7 +29,7 @@ QByteArray helloMaterial(const QString &userId,
                          const QByteArray &signingPublicKey,
                          const QByteArray &kxPublicKey,
                          const QJsonObject &caps) {
-    QByteArray out("ECHello-v3");
+    QByteArray out("ECHello-v4");
     appendField(out, QByteArray::number(ProtocolVersion));
     appendField(out, userId.toUtf8());
     appendField(out, username.toUtf8());
@@ -49,7 +49,7 @@ QByteArray helloMaterial(const QString &userId,
 }
 
 QByteArray ackMaterial(const QString &messageId, const QString &senderId) {
-    QByteArray out("ECAck-v3");
+    QByteArray out("ECAck-v4");
     appendField(out, messageId.toUtf8());
     appendField(out, senderId.toUtf8());
     return out;
@@ -58,7 +58,7 @@ QByteArray ackMaterial(const QString &messageId, const QString &senderId) {
 QByteArray relayMaterial(const QString &packetId, const QString &originId,
                          const QString &targetId, qint64 createdAtMs, int maxHops,
                          int policy, const QByteArray &innerPayload) {
-    QByteArray out("ECRelay-v3");
+    QByteArray out("ECRelay-v4");
     appendField(out, packetId.toUtf8());
     appendField(out, originId.toUtf8());
     appendField(out, targetId.toUtf8());

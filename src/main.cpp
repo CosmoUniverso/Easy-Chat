@@ -118,7 +118,7 @@ int main(int argc, char *argv[]) {
     QApplication::setApplicationName("EC");
     const QString legacyDataDir = QStandardPaths::writableLocation(QStandardPaths::AppLocalDataLocation);
     QApplication::setApplicationName("EChat");
-    QApplication::setApplicationVersion("0.4.0");
+    QApplication::setApplicationVersion("0.5.0");
 
     try {
         const QString dataDir = QStandardPaths::writableLocation(QStandardPaths::AppLocalDataLocation);
@@ -154,11 +154,10 @@ int main(int argc, char *argv[]) {
         ec::LanTransport lan;
         ec::RelayTransport relay;
 
-        bluetooth.setIdentity(identity);
-        lan.setIdentity(identity);
         transports.addTransport(&bluetooth);
         transports.addTransport(&lan);
         transports.addTransport(&relay);
+        transports.setIdentity(identity);
 
         ec::ConversationManager conversations(db, crypto, peers, transports, identity);
         ec::MainWindow window(identity, crypto, peers, conversations, transports, bluetooth);

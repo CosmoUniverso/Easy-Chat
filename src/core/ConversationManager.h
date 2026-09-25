@@ -26,8 +26,13 @@ public:
 
     QString ensureDirectConversation(const QString &peerId);
     QString createGroup(const QString &name, const QStringList &peerIds);
+    bool updateGroup(const QString &conversationId, const QString &name, const QStringList &addedPeerIds,
+                     TransportPolicy policy = TransportPolicy::Auto);
     bool sendMessage(const QString &conversationId, const QString &text,
                      TransportPolicy policy = TransportPolicy::Auto);
+    bool deleteOwnMessage(const QString &messageId,
+                          TransportPolicy policy = TransportPolicy::Auto);
+    bool changeUsername(const QString &username);
     bool relayPossible(const QString &targetPeerId,
                        TransportPolicy policy = TransportPolicy::Auto) const;
     QString deliveryIndicator(const QString &messageId) const;
@@ -36,6 +41,8 @@ public:
 signals:
     void conversationUpdated(const ec::Conversation &conversation);
     void messageAdded(const ec::Message &message);
+    void messageRemoved(const QString &conversationId, const QString &messageId);
+    void localUsernameChanged(const QString &username);
     void deliveryInfo(const QString &messageId, const QString &info);
     void protocolError(const QString &error);
     void reliabilityStateChanged();
@@ -65,6 +72,9 @@ private:
     void retryRelaySpool();
     void materializePendingPeerDeliveries(const QString &peerId);
     void queueRelaySpool(const QJsonObject &relay, TransportPolicy policy);
+    bool sendControlMessage(const Message &message, const QStringList &recipientIds, TransportPolicy policy);
+    void acknowledgeMessage(const Message &message, const Peer &sender);
+    bool applyGroupUpdate(const Message &message, const Peer &sender);
 
     Database &db_;
     CryptoEngine &crypto_;

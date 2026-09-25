@@ -16,6 +16,7 @@ public:
     virtual bool peerReachable(const Peer &peer) const = 0;
     virtual void start() = 0;
     virtual void stop() = 0;
+    virtual void setIdentity(const LocalIdentity &) {}
     virtual bool sendFrame(const Peer &peer, const QByteArray &frame) = 0;
     virtual QString linkDescription(const Peer &) const { return transportName(type()); }
     virtual int linkCost(const Peer &) const { return 100; }

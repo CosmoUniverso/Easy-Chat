@@ -122,6 +122,7 @@ EncryptedEnvelope CryptoEngine::encryptFor(const Message &message,
     const QJsonObject body{
         {"messageId", message.id}, {"conversationId", message.conversationId},
         {"senderId", message.senderId}, {"text", message.text},
+        {"kind", message.kind}, {"targetMessageId", message.targetMessageId},
         {"timestampMs", static_cast<double>(message.timestampMs)},
         {"conversationType", static_cast<int>(message.conversationType)},
         {"conversationName", message.conversationName}, {"conversationMembers", members}
@@ -227,6 +228,8 @@ bool CryptoEngine::decryptFrom(const EncryptedEnvelope &e,
     out.conversationId = obj.value("conversationId").toString();
     out.senderId = obj.value("senderId").toString();
     out.text = obj.value("text").toString();
+    out.kind = obj.value("kind").toString(QStringLiteral("text"));
+    out.targetMessageId = obj.value("targetMessageId").toString();
     out.timestampMs = static_cast<qint64>(obj.value("timestampMs").toDouble());
     out.conversationType = static_cast<ConversationType>(obj.value("conversationType").toInt());
     out.conversationName = obj.value("conversationName").toString();

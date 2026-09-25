@@ -8,6 +8,7 @@ class QLabel;
 class QLineEdit;
 class QListWidget;
 class QTextBrowser;
+class QPushButton;
 
 namespace ec {
 class BluetoothTransport;
@@ -37,6 +38,9 @@ private:
     void openBluetoothScanner();
     void createGroup();
     void createDirectChat();
+    void manageCurrentGroup();
+    void openAccountSettings();
+    void deleteMessageFromLink(const QString &messageId);
     TransportPolicy selectedPolicy() const;
 
     LocalIdentity identity_;
@@ -56,6 +60,8 @@ private:
     QLabel *securityLabel_ = nullptr;
     QLabel *statusLabel_ = nullptr;
     QLabel *conversationTitle_ = nullptr;
+    QLabel *userLabel_ = nullptr;
+    QPushButton *groupManageButton_ = nullptr;
 };
 
 } // namespace ec

@@ -48,6 +48,15 @@ ConversationManager::ConversationManager(Database &db, CryptoEngine &crypto, Pee
     connect(&transports_, &TransportManager::bytesReceived, this, &ConversationManager::onBytes);
 
     connect(&peers_, &PeerManager::peerUpdated, this, [this](const Peer &peer) {
+        for (auto it = conversations_.begin(); it != conversations_.end(); ++it) {
+            Conversation &c = it.value();
+            if (c.type != ConversationType::Direct || !c.memberIds.contains(peer.userId)) continue;
+            const QString displayName = peer.username.isEmpty() ? peer.userId : peer.username;
+            if (c.name == displayName) continue;
+            c.name = displayName;
+            db_.saveConversation(c);
+            emit conversationUpdated(c);
+        }
         QTimer::singleShot(0, this, [this, peerId = peer.userId] {
             materializePendingPeerDeliveries(peerId);
             retryPersistentQueues();
@@ -115,13 +124,70 @@ QString ConversationManager::createGroup(const QString &name, const QStringList 
     Conversation c;
     c.id = QUuid::createUuid().toString(QUuid::WithoutBraces);
     c.type = ConversationType::Group;
-    c.name = name.trimmed().isEmpty() ? QStringLiteral("Gruppo EChat") : name.trimmed();
+    c.name = name.trimmed().isEmpty() ? QStringLiteral("Gruppo EChat") : name.trimmed().left(80);
+    c.updatedAtMs = QDateTime::currentMSecsSinceEpoch();
     c.memberIds = unique.values();
     std::sort(c.memberIds.begin(), c.memberIds.end());
     conversations_[c.id] = c;
     db_.saveConversation(c);
     emit conversationUpdated(c);
+
+    Message control;
+    control.id = QUuid::createUuid().toString(QUuid::WithoutBraces);
+    control.conversationId = c.id;
+    control.senderId = identity_.userId;
+    control.kind = QStringLiteral("group-update");
+    control.timestampMs = c.updatedAtMs;
+    control.conversationType = ConversationType::Group;
+    control.conversationName = c.name;
+    control.conversationMembers = c.memberIds;
+    sendControlMessage(control, c.memberIds, TransportPolicy::Auto);
     return c.id;
+}
+
+bool ConversationManager::updateGroup(const QString &conversationId, const QString &name,
+                                      const QStringList &addedPeerIds, TransportPolicy policy) {
+    if (!conversations_.contains(conversationId)) return false;
+    Conversation c = conversations_.value(conversationId);
+    if (c.type != ConversationType::Group || !c.memberIds.contains(identity_.userId)) return false;
+
+    bool changed = false;
+    const QString trimmedName = name.trimmed();
+    if (!trimmedName.isEmpty() && trimmedName != c.name) {
+        c.name = trimmedName.left(80);
+        changed = true;
+    }
+
+    QSet<QString> members;
+    for (const auto &id : c.memberIds) members.insert(id);
+    members.insert(identity_.userId);
+    for (const auto &peerId : addedPeerIds) {
+        if (peerId.isEmpty() || peerId == identity_.userId || !peers_.hasPeer(peerId)) continue;
+        if (!members.contains(peerId)) {
+            members.insert(peerId);
+            changed = true;
+        }
+    }
+    if (!changed) return false;
+
+    c.memberIds = members.values();
+    std::sort(c.memberIds.begin(), c.memberIds.end());
+    c.updatedAtMs = QDateTime::currentMSecsSinceEpoch();
+    conversations_[c.id] = c;
+    db_.saveConversation(c);
+    emit conversationUpdated(c);
+
+    Message control;
+    control.id = QUuid::createUuid().toString(QUuid::WithoutBraces);
+    control.conversationId = c.id;
+    control.senderId = identity_.userId;
+    control.kind = QStringLiteral("group-update");
+    control.timestampMs = c.updatedAtMs;
+    control.conversationType = ConversationType::Group;
+    control.conversationName = c.name;
+    control.conversationMembers = c.memberIds;
+    sendControlMessage(control, c.memberIds, policy);
+    return true;
 }
 
 bool ConversationManager::relayPossible(const QString &targetPeerId, TransportPolicy policy) const {
@@ -181,11 +247,42 @@ void ConversationManager::queueOutbound(const QString &targetId, const QJsonObje
     emit reliabilityStateChanged();
 }
 
+bool ConversationManager::sendControlMessage(const Message &message, const QStringList &recipientIds,
+                                             TransportPolicy policy) {
+    bool accepted = false;
+    const qint64 now = QDateTime::currentMSecsSinceEpoch();
+    for (const QString &recipientId : recipientIds) {
+        if (recipientId == identity_.userId || !peers_.hasPeer(recipientId)) continue;
+        accepted = true;
+        const Peer recipient = peers_.peer(recipientId);
+        try {
+            const QJsonObject object = protocol::encryptedMessage(crypto_.encryptFor(message, identity_, recipient));
+            db_.saveDelivery(message.id, recipientId, QStringLiteral("pending-retry"));
+            queueOutbound(recipientId, object, policy, QStringLiteral("message"), message.id, now);
+
+            QString route;
+            if (sendObjectToPeer(recipient, object, policy, &route)) {
+                db_.saveDelivery(message.id, recipientId, QStringLiteral("sent"), route);
+                db_.updateOutboxRetry(outboxId(QStringLiteral("message"), message.id, recipientId),
+                                      now + retryDelayMs(0, true), 1);
+            } else {
+                db_.updateOutboxRetry(outboxId(QStringLiteral("message"), message.id, recipientId),
+                                      now + retryDelayMs(0, false), 1);
+            }
+        } catch (const std::exception &e) {
+            db_.saveDelivery(message.id, recipientId, QStringLiteral("crypto-error"));
+            emit protocolError(QString::fromUtf8(e.what()));
+        }
+    }
+    return accepted;
+}
+
 bool ConversationManager::sendMessage(const QString &conversationId, const QString &text, TransportPolicy policy) {
     if (!conversations_.contains(conversationId) || text.trimmed().isEmpty()) return false;
     const Conversation c = conversations_.value(conversationId);
     Message m;
     m.id = QUuid::createUuid().toString(QUuid::WithoutBraces);
+    m.kind = QStringLiteral("text");
     m.conversationId = c.id;
     m.senderId = identity_.userId;
     m.text = text;
@@ -233,6 +330,49 @@ bool ConversationManager::sendMessage(const QString &conversationId, const QStri
     return accepted;
 }
 
+bool ConversationManager::deleteOwnMessage(const QString &messageId, TransportPolicy policy) {
+    const Message original = db_.messageById(messageId);
+    if (original.id.isEmpty() || original.senderId != identity_.userId ||
+        !conversations_.contains(original.conversationId)) return false;
+
+    const Conversation c = conversations_.value(original.conversationId);
+    const qint64 now = QDateTime::currentMSecsSinceEpoch();
+
+    Message control;
+    control.id = QUuid::createUuid().toString(QUuid::WithoutBraces);
+    control.conversationId = c.id;
+    control.senderId = identity_.userId;
+    control.kind = QStringLiteral("delete");
+    control.targetMessageId = original.id;
+    control.timestampMs = now;
+    control.conversationType = c.type;
+    control.conversationName = c.name;
+    control.conversationMembers = c.memberIds;
+
+    db_.saveMessageTombstone(original.id, identity_.userId, c.id, now);
+    db_.deleteMessage(original.id);
+    emit messageRemoved(c.id, original.id);
+    emit reliabilityStateChanged();
+
+    sendControlMessage(control, c.memberIds, policy);
+    return true;
+}
+
+bool ConversationManager::changeUsername(const QString &username) {
+    QString next = username.trimmed();
+    next.replace('\n', ' ');
+    next.replace('\r', ' ');
+    next = next.simplified();
+    if (next.isEmpty() || next.size() > 48 || next == identity_.username) return false;
+
+    identity_.username = next;
+    db_.saveIdentity(identity_);
+    transports_.setIdentity(identity_);
+    emit localUsernameChanged(identity_.username);
+    QTimer::singleShot(0, this, &ConversationManager::broadcastIdentity);
+    return true;
+}
+
 TransportPolicy ConversationManager::onlyPolicy(TransportType type) {
     switch (type) {
     case TransportType::Bluetooth: return TransportPolicy::BluetoothOnly;
@@ -247,6 +387,53 @@ void ConversationManager::onBytes(TransportType type, const QString &transportPe
     auto &buffer = receiveBuffers_[key];
     buffer.append(bytes);
     for (const auto &object : protocol::consume(buffer)) handleObject(type, transportPeerKey, object);
+}
+
+void ConversationManager::acknowledgeMessage(const Message &message, const Peer &sender) {
+    const QJsonObject ackObject = protocol::ack(message.id, identity_);
+    QString ackRoute;
+    if (!sendObjectToPeer(sender, ackObject, TransportPolicy::Auto, &ackRoute)) {
+        queueOutbound(sender.userId, ackObject, TransportPolicy::Auto, QStringLiteral("ack"), message.id,
+                      QDateTime::currentMSecsSinceEpoch() + 2000);
+        emit deliveryInfo(message.id, QStringLiteral("ACK accodato: nessuna route verso %1").arg(sender.username));
+    }
+}
+
+bool ConversationManager::applyGroupUpdate(const Message &message, const Peer &sender) {
+    if (message.conversationType != ConversationType::Group ||
+        message.conversationId.isEmpty() || message.conversationMembers.isEmpty() ||
+        !message.conversationMembers.contains(sender.userId) ||
+        !message.conversationMembers.contains(identity_.userId)) return false;
+
+    Conversation c;
+    if (conversations_.contains(message.conversationId)) {
+        c = conversations_.value(message.conversationId);
+        if (c.type != ConversationType::Group || !c.memberIds.contains(sender.userId)) return false;
+    } else {
+        c.id = message.conversationId;
+        c.type = ConversationType::Group;
+        c.name = message.conversationName.trimmed().isEmpty() ? QStringLiteral("Gruppo EChat")
+                                                               : message.conversationName.trimmed().left(80);
+    }
+
+    QSet<QString> members;
+    for (const auto &id : c.memberIds) members.insert(id);
+    for (const auto &id : message.conversationMembers) if (!id.isEmpty()) members.insert(id);
+    members.insert(identity_.userId);
+    members.insert(sender.userId);
+    c.memberIds = members.values();
+    std::sort(c.memberIds.begin(), c.memberIds.end());
+
+    if (message.timestampMs >= c.updatedAtMs) {
+        const QString nextName = message.conversationName.trimmed();
+        if (!nextName.isEmpty()) c.name = nextName.left(80);
+        c.updatedAtMs = message.timestampMs;
+    }
+
+    conversations_[c.id] = c;
+    db_.saveConversation(c);
+    emit conversationUpdated(c);
+    return true;
 }
 
 void ConversationManager::handleObject(TransportType type, const QString &transportPeerKey, const QJsonObject &object) {
@@ -304,6 +491,39 @@ void ConversationManager::handleObject(TransportType type, const QString &transp
     }
     if (message.id != e.messageId || message.conversationId != e.conversationId || message.senderId != e.senderId) return;
 
+    if (message.kind == QStringLiteral("delete")) {
+        if (message.targetMessageId.isEmpty()) return;
+        const Message target = db_.messageById(message.targetMessageId);
+        if (!target.id.isEmpty() && (target.senderId != message.senderId || target.conversationId != message.conversationId)) {
+            emit protocolError(QStringLiteral("Eliminazione rifiutata: %1 non e' l'autore del messaggio").arg(sender.username));
+            return;
+        }
+        const QString tombstoneSender = db_.messageTombstoneSender(message.targetMessageId);
+        if (!tombstoneSender.isEmpty() && tombstoneSender != message.senderId) return;
+
+        db_.saveMessageTombstone(message.targetMessageId, message.senderId,
+                                 message.conversationId, message.timestampMs);
+        if (!target.id.isEmpty()) db_.deleteMessage(message.targetMessageId);
+        emit messageRemoved(message.conversationId, message.targetMessageId);
+        emit reliabilityStateChanged();
+        acknowledgeMessage(message, sender);
+        return;
+    }
+
+    if (message.kind == QStringLiteral("group-update")) {
+        if (!applyGroupUpdate(message, sender)) {
+            emit protocolError(QStringLiteral("Aggiornamento gruppo rifiutato da %1").arg(sender.username));
+            return;
+        }
+        acknowledgeMessage(message, sender);
+        return;
+    }
+
+    if (message.kind != QStringLiteral("text")) {
+        emit protocolError(QStringLiteral("Tipo messaggio EChat sconosciuto: %1").arg(message.kind));
+        return;
+    }
+
     if (!conversations_.contains(message.conversationId)) {
         Conversation c;
         c.id = message.conversationId;
@@ -311,22 +531,21 @@ void ConversationManager::handleObject(TransportType type, const QString &transp
         c.name = message.conversationType == ConversationType::Group ? message.conversationName : sender.username;
         c.memberIds = message.conversationMembers;
         if (c.memberIds.isEmpty()) c.memberIds = {identity_.userId, sender.userId};
+        if (c.type == ConversationType::Group) c.updatedAtMs = message.timestampMs;
         conversations_[c.id] = c;
         db_.saveConversation(c);
         emit conversationUpdated(c);
     }
-    if (!db_.hasMessage(message.id)) {
-        db_.saveMessage(message, QStringLiteral("received"));
-        emit messageAdded(message);
+
+    const QString tombstoneSender = db_.messageTombstoneSender(message.id);
+    if (tombstoneSender.isEmpty() || tombstoneSender != message.senderId) {
+        if (!db_.hasMessage(message.id)) {
+            db_.saveMessage(message, QStringLiteral("received"));
+            emit messageAdded(message);
+        }
     }
 
-    const QJsonObject ackObject = protocol::ack(message.id, identity_);
-    QString ackRoute;
-    if (!sendObjectToPeer(sender, ackObject, TransportPolicy::Auto, &ackRoute)) {
-        queueOutbound(sender.userId, ackObject, TransportPolicy::Auto, QStringLiteral("ack"), message.id,
-                      QDateTime::currentMSecsSinceEpoch() + 2000);
-        emit deliveryInfo(message.id, QStringLiteral("ACK accodato: nessuna route verso %1").arg(sender.username));
-    }
+    acknowledgeMessage(message, sender);
 }
 
 bool ConversationManager::floodRelay(QJsonObject relay, TransportPolicy policy, const QString &excludePeerId) {

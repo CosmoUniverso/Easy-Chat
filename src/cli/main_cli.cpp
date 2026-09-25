@@ -23,7 +23,7 @@ int main(int argc, char *argv[]) {
     QCoreApplication::setApplicationName("EC");
     const QString legacyDataDir=QStandardPaths::writableLocation(QStandardPaths::AppLocalDataLocation);
     QCoreApplication::setApplicationName("EChat");
-    QCoreApplication::setApplicationVersion("0.4.0-experimental");
+    QCoreApplication::setApplicationVersion("0.5.0-experimental");
 
     try {
         const QString dataDir=QStandardPaths::writableLocation(QStandardPaths::AppLocalDataLocation);
@@ -43,12 +43,12 @@ int main(int argc, char *argv[]) {
         }
 
         ec::PeerManager peers(db); ec::TransportManager transports; ec::BluetoothTransport bluetooth; ec::LanTransport lan; ec::RelayTransport relay;
-        bluetooth.setIdentity(identity);
-        lan.setIdentity(identity); transports.addTransport(&bluetooth); transports.addTransport(&lan); transports.addTransport(&relay);
+        transports.addTransport(&bluetooth); transports.addTransport(&lan); transports.addTransport(&relay);
+        transports.setIdentity(identity);
         ec::ConversationManager conversations(db,crypto,peers,transports,identity);
         ec::CliController cli(identity,crypto,peers,conversations,transports,bluetooth);
 
-        std::cout << "EChat CLI 0.4 - SPERIMENTALE\nDigita 'help'.\n> " << std::flush;
+        std::cout << "EChat CLI 0.5 - SPERIMENTALE\nDigita 'help'.\n> " << std::flush;
         transports.startAll();
 
         std::thread input([&cli] {

@@ -57,7 +57,7 @@ public:
     QSet<ConnectionCtx *> connections;
     QSet<QString> connectingHosts;
 
-    static constexpr char AlpnText[] = "echat-v3";
+    static constexpr char AlpnText[] = "echat-v4";
 
     static QString addrString(const QUIC_ADDR *address) {
         if (!address) return {};

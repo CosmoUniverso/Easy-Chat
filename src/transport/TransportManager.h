@@ -12,6 +12,7 @@ public:
     explicit TransportManager(QObject *parent = nullptr);
 
     void addTransport(Transport *transport);
+    void setIdentity(const LocalIdentity &identity);
     void startAll();
     void stopAll();
 

@@ -1,4 +1,4 @@
-# EChat 0.4 architecture
+# EChat 0.5 architecture
 
 ```text
                               EChat Core
@@ -61,7 +61,7 @@ B never needs to decrypt the message body. Relay spool custody is bounded: entri
 
 ## Routing
 
-EChat still separates capability, reachability and user policy. In 0.4 the direct transport order is computed dynamically.
+EChat still separates capability, reachability and user policy. The direct transport order is computed dynamically.
 
 ```text
 score(Bluetooth) = fixed RFCOMM cost
@@ -86,6 +86,18 @@ Bluetooth only             Bluetooth + LAN                    LAN only
 ```
 
 If PC3 disappears, PC1 may persist the signed relay object and continue later. PC2 also retains its own encrypted message object until PC3's signed ACK returns.
+
+
+## Encrypted control messages
+
+EChat 0.5 reuses the recipient-specific E2EE message envelope for control operations. The encrypted body carries a `kind` field. Normal chat messages use `text`; control messages currently use `delete` and `group-update`.
+
+- `delete` carries the target message ID. A recipient accepts it only from the original sender. A persistent tombstone prevents an older queued copy of the deleted message from reappearing later.
+- `group-update` carries the current group name and membership. Membership changes are additive in 0.5; concurrent additions merge by set union. Group names use the latest update timestamp.
+  - 0.5 intentionally has no group-admin/role model yet: any current member may issue a valid additive group update. Removing/expelling members is deferred because it needs explicit authorization and key/session semantics.
+- Control messages use the same persistent outbox, relay mesh and signed ACK flow as normal messages. Relay nodes still see only the outer routing metadata and final-recipient ciphertext.
+
+Changing the local username is not a key rotation: the same User ID and Ed25519/X25519 keys are retained, and a new signed HELLO/mesh announcement propagates the display-name change.
 
 ## LAN stack
 

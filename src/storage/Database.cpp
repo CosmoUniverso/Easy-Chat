@@ -44,8 +44,9 @@ void Database::migrate() {
     QSqlQuery q(db_);
     execOrThrow(q, "CREATE TABLE IF NOT EXISTS identity (id INTEGER PRIMARY KEY CHECK(id=1), user_id TEXT NOT NULL, username TEXT NOT NULL, public_key BLOB NOT NULL, secret_key BLOB NOT NULL, sign_public_key BLOB, sign_secret_key BLOB)");
     execOrThrow(q, "CREATE TABLE IF NOT EXISTS peers (user_id TEXT PRIMARY KEY, username TEXT NOT NULL, public_key BLOB NOT NULL, sign_public_key BLOB, fingerprint TEXT, bluetooth_address TEXT, lan_host TEXT, lan_port INTEGER, relay_device_id TEXT)");
-    execOrThrow(q, "CREATE TABLE IF NOT EXISTS conversations (id TEXT PRIMARY KEY, type INTEGER NOT NULL, name TEXT, member_ids TEXT NOT NULL)");
+    execOrThrow(q, "CREATE TABLE IF NOT EXISTS conversations (id TEXT PRIMARY KEY, type INTEGER NOT NULL, name TEXT, member_ids TEXT NOT NULL, updated_at_ms INTEGER NOT NULL DEFAULT 0)");
     execOrThrow(q, "CREATE TABLE IF NOT EXISTS messages (id TEXT PRIMARY KEY, conversation_id TEXT NOT NULL, sender_id TEXT NOT NULL, text TEXT NOT NULL, timestamp_ms INTEGER NOT NULL, state TEXT NOT NULL)");
+    execOrThrow(q, "CREATE TABLE IF NOT EXISTS message_tombstones (message_id TEXT PRIMARY KEY, sender_id TEXT NOT NULL, conversation_id TEXT NOT NULL, deleted_at_ms INTEGER NOT NULL)");
     execOrThrow(q, "CREATE TABLE IF NOT EXISTS deliveries (message_id TEXT NOT NULL, recipient_id TEXT NOT NULL, state TEXT NOT NULL, transport TEXT, PRIMARY KEY(message_id, recipient_id))");
     execOrThrow(q, "CREATE TABLE IF NOT EXISTS outbox (id TEXT PRIMARY KEY, target_id TEXT NOT NULL, payload BLOB NOT NULL, policy INTEGER NOT NULL, kind TEXT NOT NULL, logical_id TEXT NOT NULL, created_at_ms INTEGER NOT NULL, next_attempt_ms INTEGER NOT NULL, expires_at_ms INTEGER NOT NULL, attempts INTEGER NOT NULL DEFAULT 0)");
     execOrThrow(q, "CREATE INDEX IF NOT EXISTS idx_outbox_due ON outbox(next_attempt_ms)");
@@ -55,6 +56,7 @@ void Database::migrate() {
     addColumnIfMissing("identity", "sign_secret_key", "BLOB");
     addColumnIfMissing("peers", "sign_public_key", "BLOB");
     addColumnIfMissing("peers", "fingerprint", "TEXT");
+    addColumnIfMissing("conversations", "updated_at_ms", "INTEGER NOT NULL DEFAULT 0");
 }
 
 bool Database::hasIdentity() const {
@@ -103,17 +105,19 @@ QList<Peer> Database::peers() const {
 
 void Database::saveConversation(const Conversation &c) {
     QJsonArray a; for (const auto &id : c.memberIds) a.append(id);
-    QSqlQuery q(db_); q.prepare("INSERT OR REPLACE INTO conversations(id,type,name,member_ids) VALUES(?,?,?,?)");
+    QSqlQuery q(db_); q.prepare("INSERT OR REPLACE INTO conversations(id,type,name,member_ids,updated_at_ms) VALUES(?,?,?,?,?)");
     q.addBindValue(c.id); q.addBindValue(static_cast<int>(c.type)); q.addBindValue(c.name);
     q.addBindValue(QString::fromUtf8(QJsonDocument(a).toJson(QJsonDocument::Compact)));
+    q.addBindValue(c.updatedAtMs);
     if (!q.exec()) throw std::runtime_error(q.lastError().text().toStdString());
 }
 
 QList<Conversation> Database::conversations() const {
-    QList<Conversation> out; QSqlQuery q("SELECT id,type,name,member_ids FROM conversations", db_);
+    QList<Conversation> out; QSqlQuery q("SELECT id,type,name,member_ids,updated_at_ms FROM conversations", db_);
     while (q.next()) {
         Conversation c; c.id=q.value(0).toString(); c.type=static_cast<ConversationType>(q.value(1).toInt()); c.name=q.value(2).toString();
         for (const auto &v : QJsonDocument::fromJson(q.value(3).toString().toUtf8()).array()) c.memberIds << v.toString();
+        c.updatedAtMs=q.value(4).toLongLong();
         out << c;
     }
     return out;
@@ -184,6 +188,38 @@ QList<Message> Database::messages(const QString &conversationId) const {
         m.text=q.value(3).toString(); m.timestampMs=q.value(4).toLongLong(); out << m;
     }
     return out;
+}
+
+void Database::deleteMessage(const QString &messageId) {
+    if (messageId.isEmpty()) return;
+    if (!db_.transaction()) throw std::runtime_error(db_.lastError().text().toStdString());
+    QSqlQuery q(db_);
+    q.prepare("DELETE FROM outbox WHERE logical_id=?");
+    q.addBindValue(messageId);
+    if (!q.exec()) { db_.rollback(); throw std::runtime_error(q.lastError().text().toStdString()); }
+    q.prepare("DELETE FROM deliveries WHERE message_id=?");
+    q.addBindValue(messageId);
+    if (!q.exec()) { db_.rollback(); throw std::runtime_error(q.lastError().text().toStdString()); }
+    q.prepare("DELETE FROM messages WHERE id=?");
+    q.addBindValue(messageId);
+    if (!q.exec()) { db_.rollback(); throw std::runtime_error(q.lastError().text().toStdString()); }
+    if (!db_.commit()) throw std::runtime_error(db_.lastError().text().toStdString());
+}
+
+void Database::saveMessageTombstone(const QString &messageId, const QString &senderId,
+                                    const QString &conversationId, qint64 deletedAtMs) {
+    QSqlQuery q(db_);
+    q.prepare("INSERT OR REPLACE INTO message_tombstones(message_id,sender_id,conversation_id,deleted_at_ms) VALUES(?,?,?,?)");
+    q.addBindValue(messageId); q.addBindValue(senderId); q.addBindValue(conversationId); q.addBindValue(deletedAtMs);
+    if (!q.exec()) throw std::runtime_error(q.lastError().text().toStdString());
+}
+
+QString Database::messageTombstoneSender(const QString &messageId) const {
+    QSqlQuery q(db_);
+    q.prepare("SELECT sender_id FROM message_tombstones WHERE message_id=?");
+    q.addBindValue(messageId);
+    if (!q.exec() || !q.next()) return {};
+    return q.value(0).toString();
 }
 
 void Database::saveOutbox(const OutboxEntry &e) {

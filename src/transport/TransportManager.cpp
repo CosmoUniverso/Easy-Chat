@@ -16,6 +16,10 @@ void TransportManager::addTransport(Transport *transport) {
     connect(transport, &Transport::statusMessage, this, &TransportManager::statusMessage);
 }
 
+void TransportManager::setIdentity(const LocalIdentity &identity) {
+    for (auto *t : transports_) t->setIdentity(identity);
+}
+
 void TransportManager::startAll() { for (auto *t : transports_) t->start(); }
 void TransportManager::stopAll() { for (auto *t : transports_) t->stop(); }
 

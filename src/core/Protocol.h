@@ -8,7 +8,7 @@
 namespace ec::protocol {
 
 constexpr quint32 MaxFrameBytes = 8 * 1024 * 1024;
-constexpr int ProtocolVersion = 3;
+constexpr int ProtocolVersion = 4;
 
 QByteArray frame(const QJsonObject &object);
 QList<QJsonObject> consume(QByteArray &buffer);

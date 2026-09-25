@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.5.0
+
+- Bumped wire protocol to **v4** and QUIC ALPN to `echat-v4`.
+- Added encrypted **delete-for-everyone** control messages for messages authored by the local identity.
+- Added persistent deletion tombstones so a delayed/retried old ciphertext cannot resurrect a deleted message.
+- Deleting a local message also cancels its pending sender outbox/delivery rows before propagating the deletion.
+- Added **group management** for existing groups: add known peers and rename the group.
+- Group metadata updates are recipient-specific E2EE control messages and use the same retry/ACK/mesh path as chat messages.
+- Group membership updates are additive/mergeable; group names use the latest update timestamp.
+- New groups now send their metadata immediately instead of waiting for the first chat message.
+- Added **Account** settings to change username while retaining User ID, Ed25519/X25519 keys and fingerprint.
+- Username changes are persisted and propagated via signed identity announcements; direct-chat display names refresh when a peer renames itself.
+- Added UI delete links on locally authored messages and a `Gestisci gruppo` dialog.
+- Extended self-tests for encrypted control payloads, deletion tombstones and persisted group metadata.
+
 ## 0.4.0
 
 - Added a persistent encrypted sender outbox in SQLite.

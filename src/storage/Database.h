@@ -31,6 +31,10 @@ public:
     QStringList pendingPeerMessageIds(const QString &recipientId, const QString &senderId) const;
     bool hasMessage(const QString &messageId) const;
     QList<Message> messages(const QString &conversationId) const;
+    void deleteMessage(const QString &messageId);
+    void saveMessageTombstone(const QString &messageId, const QString &senderId,
+                              const QString &conversationId, qint64 deletedAtMs);
+    QString messageTombstoneSender(const QString &messageId) const;
 
     void saveOutbox(const OutboxEntry &entry);
     QList<OutboxEntry> dueOutbox(qint64 nowMs, int limit = 64) const;
