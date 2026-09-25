@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.7.0
+
+- Added a **dual desktop UI architecture** without forking the project: Light and Full share the same core, database, identity, crypto, transport manager and reliability queues.
+- Preserved the existing interface as **EChat Light**, including Stealth mode.
+- Added **EChat Full**, a denser modern messenger layout with:
+  - compact action rail;
+  - searchable and filterable chat/group list;
+  - larger conversation workspace;
+  - right-side details panel for members, security, route state and persistent queue status;
+  - direct access to account, group management and Bluetooth discovery.
+- Added instant Light/Full switching while keeping the active conversation when possible.
+- Persisted the selected UI mode with `QSettings`.
+- Added command-line overrides `--light`, `--full`, `--ui=light` and `--ui=full`.
+- Kept protocol v4 and all 0.6 networking/crypto behavior unchanged.
+
 ## 0.6.0
 
 - Added **Stealth/compact desktop mode**: a small always-on-top popup that shows only the current chat, a short recent-message preview, and the composer.

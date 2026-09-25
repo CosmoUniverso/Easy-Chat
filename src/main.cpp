@@ -7,6 +7,7 @@
 #include "transport/internet/RelayTransport.h"
 #include "transport/lan/LanTransport.h"
 #include "ui/MainWindow.h"
+#include "ui/FullMainWindow.h"
 
 #include <QApplication>
 #include <QColor>
@@ -17,6 +18,7 @@
 #include <QInputDialog>
 #include <QMessageBox>
 #include <QStandardPaths>
+#include <QSettings>
 
 
 namespace {
@@ -118,7 +120,7 @@ int main(int argc, char *argv[]) {
     QApplication::setApplicationName("EC");
     const QString legacyDataDir = QStandardPaths::writableLocation(QStandardPaths::AppLocalDataLocation);
     QApplication::setApplicationName("EChat");
-    QApplication::setApplicationVersion("0.6.0");
+    QApplication::setApplicationVersion("0.7.0");
 
     try {
         const QString dataDir = QStandardPaths::writableLocation(QStandardPaths::AppLocalDataLocation);
@@ -160,8 +162,37 @@ int main(int argc, char *argv[]) {
         transports.setIdentity(identity);
 
         ec::ConversationManager conversations(db, crypto, peers, transports, identity);
-        ec::MainWindow window(identity, crypto, peers, conversations, transports, bluetooth);
-        window.show();
+        ec::MainWindow lightWindow(identity, crypto, peers, conversations, transports, bluetooth);
+        ec::FullMainWindow fullWindow(identity, crypto, peers, conversations, transports, bluetooth);
+
+        QSettings settings;
+        QString uiMode = settings.value(QStringLiteral("ui/mode"), QStringLiteral("light")).toString().toLower();
+        const QStringList args = app.arguments();
+        if (args.contains(QStringLiteral("--full")) || args.contains(QStringLiteral("--ui=full"))) uiMode = QStringLiteral("full");
+        if (args.contains(QStringLiteral("--light")) || args.contains(QStringLiteral("--ui=light"))) uiMode = QStringLiteral("light");
+
+        auto showFull = [&](const QString &conversationId) {
+            if (!conversationId.isEmpty()) fullWindow.activateConversation(conversationId);
+            fullWindow.show();
+            fullWindow.raise();
+            fullWindow.activateWindow();
+            lightWindow.hide();
+            settings.setValue(QStringLiteral("ui/mode"), QStringLiteral("full"));
+        };
+        auto showLight = [&](const QString &conversationId) {
+            if (!conversationId.isEmpty()) lightWindow.activateConversation(conversationId);
+            lightWindow.show();
+            lightWindow.raise();
+            lightWindow.activateWindow();
+            fullWindow.hide();
+            settings.setValue(QStringLiteral("ui/mode"), QStringLiteral("light"));
+        };
+
+        QObject::connect(&lightWindow, &ec::MainWindow::requestFullMode, &app, showFull);
+        QObject::connect(&fullWindow, &ec::FullMainWindow::requestLightMode, &app, showLight);
+
+        if (uiMode == QStringLiteral("full")) showFull(QString{});
+        else showLight(QString{});
 
         transports.startAll();
         const int rc = app.exec();

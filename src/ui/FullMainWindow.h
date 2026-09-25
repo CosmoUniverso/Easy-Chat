@@ -7,9 +7,8 @@ class QComboBox;
 class QLabel;
 class QLineEdit;
 class QListWidget;
-class QTextBrowser;
 class QPushButton;
-class QDialog;
+class QTextBrowser;
 
 namespace ec {
 class BluetoothTransport;
@@ -18,38 +17,39 @@ class CryptoEngine;
 class PeerManager;
 class TransportManager;
 
-class MainWindow : public QMainWindow {
+class FullMainWindow : public QMainWindow {
     Q_OBJECT
 public:
-    MainWindow(const LocalIdentity &identity,
-               CryptoEngine &crypto,
-               PeerManager &peers,
-               ConversationManager &conversations,
-               TransportManager &transports,
-               BluetoothTransport &bluetooth,
-               QWidget *parent = nullptr);
+    FullMainWindow(const LocalIdentity &identity,
+                   CryptoEngine &crypto,
+                   PeerManager &peers,
+                   ConversationManager &conversations,
+                   TransportManager &transports,
+                   BluetoothTransport &bluetooth,
+                   QWidget *parent = nullptr);
 
     QString currentConversationId() const { return currentConversationId_; }
     void activateConversation(const QString &id);
 
 signals:
-    void requestFullMode(const QString &conversationId);
+    void requestLightMode(const QString &conversationId);
 
 private:
     void applyTheme();
     void refreshConversations();
-    void selectConversation(const QString &id);
     void refreshMessages();
-    void refreshRouteStatus();
     void refreshHeader();
-    void openBluetoothScanner();
-    void createGroup();
+    void refreshDetails();
+    void refreshRouteStatus();
+    void selectConversation(const QString &id);
+    void setConversationFilter(int mode);
+
     void createDirectChat();
+    void createGroup();
     void manageCurrentGroup();
     void openAccountSettings();
+    void openBluetoothScanner();
     void deleteMessageFromLink(const QString &messageId);
-    void openStealthMode();
-    void refreshStealthMode();
     TransportPolicy selectedPolicy() const;
 
     LocalIdentity identity_;
@@ -60,21 +60,26 @@ private:
     BluetoothTransport &bluetooth_;
 
     QString currentConversationId_;
+    int conversationFilter_ = 0; // 0 all, 1 direct, 2 group
+
     QListWidget *conversationList_ = nullptr;
+    QListWidget *membersList_ = nullptr;
     QTextBrowser *messages_ = nullptr;
     QLineEdit *messageEdit_ = nullptr;
     QLineEdit *searchEdit_ = nullptr;
     QComboBox *policyBox_ = nullptr;
+    QLabel *conversationTitle_ = nullptr;
+    QLabel *conversationSubtitle_ = nullptr;
+    QLabel *userLabel_ = nullptr;
     QLabel *routeLabel_ = nullptr;
     QLabel *securityLabel_ = nullptr;
+    QLabel *queueLabel_ = nullptr;
     QLabel *statusLabel_ = nullptr;
-    QLabel *conversationTitle_ = nullptr;
-    QLabel *userLabel_ = nullptr;
-    QPushButton *groupManageButton_ = nullptr;
-    QDialog *stealthDialog_ = nullptr;
-    QLabel *stealthTitle_ = nullptr;
-    QTextBrowser *stealthMessages_ = nullptr;
-    QLineEdit *stealthMessageEdit_ = nullptr;
+    QLabel *detailsTitle_ = nullptr;
+    QPushButton *manageGroupButton_ = nullptr;
+    QPushButton *allFilterButton_ = nullptr;
+    QPushButton *directFilterButton_ = nullptr;
+    QPushButton *groupFilterButton_ = nullptr;
 };
 
 } // namespace ec

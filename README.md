@@ -1,6 +1,25 @@
 # EChat — Easy Chat
 
-EChat 0.6.0 is an offline-first desktop messenger prototype for **Windows 10/11 and Linux/Fedora**. It combines Bluetooth Classic/RFCOMM, LAN QUIC/TCP, end-to-end encrypted multi-hop relay and persistent retry/store-and-forward for intermittent networks.
+EChat 0.7.0 is an offline-first desktop messenger prototype for **Windows 10/11 and Linux/Fedora**. It combines Bluetooth Classic/RFCOMM, LAN QUIC/TCP, end-to-end encrypted multi-hop relay and persistent retry/store-and-forward for intermittent networks.
+
+## 0.7.0: Light + Full nello stesso EChat
+
+EChat ora mantiene **due interfacce sopra lo stesso core**, senza creare due codebase o due protocolli:
+
+- **Light**: l'interfaccia minimale gia' esistente, con chat, gruppi, policy di rete e modalita' Stealth. E' pensata per occupare poco spazio e restare veloce.
+- **Full**: una nuova interfaccia piu' ricca, ispirata ai moderni client desktop di messaggistica: rail di azioni, lista chat filtrabile, area messaggi centrale e pannello laterale con membri, sicurezza, route e coda.
+
+Le due UI condividono esattamente **account, SQLite, cronologia, E2EE, peer, outbox, relay spool e trasporti**. Passare da Light a Full non duplica dati e non crea una seconda identita'. La modalita' scelta viene ricordata al riavvio.
+
+Avvio forzato da riga di comando:
+
+```bash
+./EChat --light
+./EChat --full
+# equivalenti: --ui=light / --ui=full
+```
+
+La strategia di sviluppo da 0.7 in poi e': **Light stabile e minimale**, con bugfix e parita' delle funzioni essenziali; **Full** diventa il ramo UX principale per funzioni piu' ricche. Entrambe usano sempre lo stesso backend.
 
 
 ### 0.6.0 Stealth / compact desktop mode
@@ -169,6 +188,7 @@ Use Qt 6 for MSVC, CMake and Visual Studio Build Tools. The release workflow dow
 | delete own messages for everyone | implemented in 0.5 |
 | add members / rename existing groups | implemented in 0.5 |
 | change local username | implemented in 0.5 |
+| Light + Full shared-core desktop UIs | implemented in 0.7 |
 | full global path-cost routing | planned |
 | BLE/GATT discovery | planned |
 | Internet relay QUIC/WSS | planned |

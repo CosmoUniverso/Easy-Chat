@@ -6,3 +6,12 @@ Exec=EChat
 Icon=echat
 Categories=Network;InstantMessaging;
 Terminal=false
+Actions=Light;Full;
+
+[Desktop Action Light]
+Name=EChat Light
+Exec=EChat --light
+
+[Desktop Action Full]
+Name=EChat Full
+Exec=EChat --full

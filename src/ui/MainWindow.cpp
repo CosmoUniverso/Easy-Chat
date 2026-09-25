@@ -32,7 +32,7 @@ MainWindow::MainWindow(const LocalIdentity &identity, CryptoEngine &crypto, Peer
                        BluetoothTransport &bluetooth, QWidget *parent)
     : QMainWindow(parent), identity_(identity), crypto_(crypto), peers_(peers), conversations_(conversations),
       transports_(transports), bluetooth_(bluetooth) {
-    setWindowTitle(QStringLiteral("EChat — Easy Chat"));
+    setWindowTitle(QStringLiteral("EChat Light — Easy Chat"));
     resize(1220, 760);
     setMinimumSize(900, 580);
 
@@ -103,10 +103,13 @@ MainWindow::MainWindow(const LocalIdentity &identity, CryptoEngine &crypto, Peer
     groupManageButton_ = new QPushButton(QStringLiteral("Gestisci gruppo"));
     groupManageButton_->setObjectName("headerActionButton");
     groupManageButton_->setVisible(false);
+    auto *fullButton = new QPushButton(QStringLiteral("Full UI"));
+    fullButton->setObjectName("headerActionButton");
+    fullButton->setToolTip(QStringLiteral("Passa all'interfaccia completa"));
     auto *stealthButton = new QPushButton(QStringLiteral("Stealth"));
     stealthButton->setObjectName("headerActionButton");
     stealthButton->setToolTip(QStringLiteral("Modalita' compatta · Ctrl+Shift+S"));
-    titleRow->addWidget(conversationTitle_); titleRow->addStretch(); titleRow->addWidget(groupManageButton_); titleRow->addWidget(stealthButton); titleRow->addWidget(policyBox_);
+    titleRow->addWidget(conversationTitle_); titleRow->addStretch(); titleRow->addWidget(groupManageButton_); titleRow->addWidget(fullButton); titleRow->addWidget(stealthButton); titleRow->addWidget(policyBox_);
     routeLabel_ = new QLabel(QStringLiteral("Nessuna route")); routeLabel_->setObjectName("routeLabel");
     securityLabel_ = new QLabel(QStringLiteral("E2EE v2 · Ed25519 + X25519 + XChaCha20-Poly1305"));
     securityLabel_->setObjectName("securityLabel");
@@ -141,6 +144,7 @@ MainWindow::MainWindow(const LocalIdentity &identity, CryptoEngine &crypto, Peer
 
     connect(scanButton, &QPushButton::clicked, this, &MainWindow::openBluetoothScanner);
     connect(accountButton, &QPushButton::clicked, this, &MainWindow::openAccountSettings);
+    connect(fullButton, &QPushButton::clicked, this, [this] { emit requestFullMode(currentConversationId_); });
     connect(stealthButton, &QPushButton::clicked, this, &MainWindow::openStealthMode);
     auto *stealthShortcut = new QShortcut(QKeySequence(QStringLiteral("Ctrl+Shift+S")), this);
     connect(stealthShortcut, &QShortcut::activated, this, &MainWindow::openStealthMode);
@@ -279,6 +283,11 @@ void MainWindow::refreshConversations() {
         auto *item=new QListWidgetItem(prefix+title,conversationList_); item->setData(Qt::UserRole,c.id);
         if (c.id==selected) conversationList_->setCurrentItem(item);
     }
+}
+
+void MainWindow::activateConversation(const QString &id) {
+    if (id.isEmpty()) return;
+    selectConversation(id);
 }
 
 void MainWindow::selectConversation(const QString &id) {

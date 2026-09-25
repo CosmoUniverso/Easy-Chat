@@ -1,4 +1,33 @@
-# EChat 0.6.0 architecture
+# EChat 0.7.0 architecture
+
+## Dual UI architecture
+
+EChat 0.7 deliberately does **not** split Light and Full into separate products. Both windows are presentation layers over one live application core:
+
+```text
+                  +-------------------+
+                  |   EChat process   |
+                  +---------+---------+
+                            |
+                 +----------+----------+
+                 |                     |
+          EChat Light              EChat Full
+       minimal + Stealth      rich desktop workspace
+                 |                     |
+                 +----------+----------+
+                            |
+                  ConversationManager
+                            |
+          +-----------------+-----------------+
+          |                 |                 |
+       Database          CryptoEngine    TransportManager
+       SQLite             E2EE v2       BT / QUIC / TCP / relay
+```
+
+Only one UI is visible at a time. The inactive window stays attached to the same managers so it can be shown immediately without reinitializing networking or opening a second database. The selected mode is stored in `QSettings`. `--light` / `--full` can override it for a launch.
+
+This keeps feature logic out of the UI split: message delivery, deletion, group metadata, routing, ACKs and retry semantics stay in the shared core. Light should remain conservative and compact; Full can evolve faster without duplicating protocol code.
+
 
 ## Queued-policy rebinding
 
