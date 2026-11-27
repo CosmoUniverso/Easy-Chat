@@ -5,6 +5,7 @@
 #include "storage/Database.h"
 #include "transport/TransportManager.h"
 
+#include <QCoreApplication>
 #include <QCryptographicHash>
 #include <QDateTime>
 #include <QJsonDocument>
@@ -97,7 +98,7 @@ QString ConversationManager::deliveryIndicator(const QString &messageId) const {
 }
 
 QString ConversationManager::reliabilitySummary() const {
-    return QStringLiteral("coda %1 · relay store %2").arg(db_.outboxCount()).arg(db_.relaySpoolCount());
+    return QCoreApplication::translate("EChat", "coda %1 · relay store %2").arg(db_.outboxCount()).arg(db_.relaySpoolCount());
 }
 
 QString ConversationManager::ensureDirectConversation(const QString &peerId) {
@@ -124,7 +125,7 @@ QString ConversationManager::createGroup(const QString &name, const QStringList 
     Conversation c;
     c.id = QUuid::createUuid().toString(QUuid::WithoutBraces);
     c.type = ConversationType::Group;
-    c.name = name.trimmed().isEmpty() ? QStringLiteral("Gruppo EChat") : name.trimmed().left(80);
+    c.name = name.trimmed().isEmpty() ? QCoreApplication::translate("EChat", "Gruppo EChat") : name.trimmed().left(80);
     c.updatedAtMs = QDateTime::currentMSecsSinceEpoch();
     c.memberIds = unique.values();
     std::sort(c.memberIds.begin(), c.memberIds.end());
@@ -310,7 +311,7 @@ bool ConversationManager::sendMessage(const QString &conversationId, const QStri
         accepted = true;
         if (!peers_.hasPeer(recipientId)) {
             db_.saveDelivery(m.id, recipientId, QStringLiteral("pending-peer"));
-            emit deliveryInfo(m.id, QStringLiteral("%1: identita' non ancora conosciuta; messaggio conservato").arg(recipientId));
+            emit deliveryInfo(m.id, QCoreApplication::translate("EChat", "%1: identita' non ancora conosciuta; messaggio conservato").arg(recipientId));
             continue;
         }
         const Peer recipient = peers_.peer(recipientId);
@@ -325,12 +326,12 @@ bool ConversationManager::sendMessage(const QString &conversationId, const QStri
                 db_.saveDelivery(m.id, recipientId, QStringLiteral("sent"), route);
                 db_.updateOutboxRetry(outboxId(QStringLiteral("message"), m.id, recipientId),
                                       now + retryDelayMs(0, true), 1);
-                emit deliveryInfo(m.id, QStringLiteral("%1 via %2 · in attesa di ACK").arg(recipient.username, route));
+                emit deliveryInfo(m.id, QCoreApplication::translate("EChat", "%1 via %2 · in attesa di ACK").arg(recipient.username, route));
             } else {
                 db_.saveDelivery(m.id, recipientId, QStringLiteral("pending-retry"));
                 db_.updateOutboxRetry(outboxId(QStringLiteral("message"), m.id, recipientId),
                                       now + retryDelayMs(0, false), 1);
-                emit deliveryInfo(m.id, QStringLiteral("%1: accodato, nessuna route disponibile").arg(recipient.username));
+                emit deliveryInfo(m.id, QCoreApplication::translate("EChat", "%1: accodato, nessuna route disponibile").arg(recipient.username));
             }
         } catch (const std::exception &e) {
             db_.saveDelivery(m.id, recipientId, QStringLiteral("crypto-error"));
@@ -405,7 +406,7 @@ void ConversationManager::acknowledgeMessage(const Message &message, const Peer 
     if (!sendObjectToPeer(sender, ackObject, TransportPolicy::Auto, &ackRoute)) {
         queueOutbound(sender.userId, ackObject, TransportPolicy::Auto, QStringLiteral("ack"), message.id,
                       QDateTime::currentMSecsSinceEpoch() + 2000);
-        emit deliveryInfo(message.id, QStringLiteral("ACK accodato: nessuna route verso %1").arg(sender.username));
+        emit deliveryInfo(message.id, QCoreApplication::translate("EChat", "ACK accodato: nessuna route verso %1").arg(sender.username));
     }
 }
 
@@ -422,7 +423,7 @@ bool ConversationManager::applyGroupUpdate(const Message &message, const Peer &s
     } else {
         c.id = message.conversationId;
         c.type = ConversationType::Group;
-        c.name = message.conversationName.trimmed().isEmpty() ? QStringLiteral("Gruppo EChat")
+        c.name = message.conversationName.trimmed().isEmpty() ? QCoreApplication::translate("EChat", "Gruppo EChat")
                                                                : message.conversationName.trimmed().left(80);
     }
 
@@ -470,13 +471,13 @@ void ConversationManager::handleObject(TransportType type, const QString &transp
         const QString messageId = object.value("messageId").toString();
         if (from.isEmpty() || messageId.isEmpty() || !peers_.hasPeer(from)) return;
         if (!protocol::verifyAck(object, peers_.peer(from).signingPublicKey)) {
-            emit protocolError(QStringLiteral("ACK con firma Ed25519 non valida da %1").arg(from));
+            emit protocolError(QCoreApplication::translate("EChat", "ACK con firma Ed25519 non valida da %1").arg(from));
             return;
         }
         db_.updateDelivery(messageId, from, QStringLiteral("delivered"));
         db_.deleteOutboxFor(messageId, from, QStringLiteral("message"));
         emit reliabilityStateChanged();
-        emit deliveryInfo(messageId, QStringLiteral("consegnato a %1").arg(peers_.peer(from).username));
+        emit deliveryInfo(messageId, QCoreApplication::translate("EChat", "consegnato a %1").arg(peers_.peer(from).username));
         return;
     }
     if (kind != "message") return;
@@ -496,7 +497,7 @@ void ConversationManager::handleObject(TransportType type, const QString &transp
     const Peer sender = peers_.peer(e.senderId);
     Message message;
     if (!crypto_.decryptFrom(e, identity_, sender, message)) {
-        emit protocolError(QStringLiteral("Messaggio E2EE v2 non autenticabile da %1").arg(sender.username));
+        emit protocolError(QCoreApplication::translate("EChat", "Messaggio E2EE v2 non autenticabile da %1").arg(sender.username));
         return;
     }
     if (message.id != e.messageId || message.conversationId != e.conversationId || message.senderId != e.senderId) return;
@@ -505,7 +506,7 @@ void ConversationManager::handleObject(TransportType type, const QString &transp
         if (message.targetMessageId.isEmpty()) return;
         const Message target = db_.messageById(message.targetMessageId);
         if (!target.id.isEmpty() && (target.senderId != message.senderId || target.conversationId != message.conversationId)) {
-            emit protocolError(QStringLiteral("Eliminazione rifiutata: %1 non e' l'autore del messaggio").arg(sender.username));
+            emit protocolError(QCoreApplication::translate("EChat", "Eliminazione rifiutata: %1 non e' l'autore del messaggio").arg(sender.username));
             return;
         }
         const QString tombstoneSender = db_.messageTombstoneSender(message.targetMessageId);
@@ -522,7 +523,7 @@ void ConversationManager::handleObject(TransportType type, const QString &transp
 
     if (message.kind == QStringLiteral("group-update")) {
         if (!applyGroupUpdate(message, sender)) {
-            emit protocolError(QStringLiteral("Aggiornamento gruppo rifiutato da %1").arg(sender.username));
+            emit protocolError(QCoreApplication::translate("EChat", "Aggiornamento gruppo rifiutato da %1").arg(sender.username));
             return;
         }
         acknowledgeMessage(message, sender);
@@ -530,7 +531,7 @@ void ConversationManager::handleObject(TransportType type, const QString &transp
     }
 
     if (message.kind != QStringLiteral("text")) {
-        emit protocolError(QStringLiteral("Tipo messaggio EChat sconosciuto: %1").arg(message.kind));
+        emit protocolError(QCoreApplication::translate("EChat", "Tipo messaggio EChat sconosciuto: %1").arg(message.kind));
         return;
     }
 
@@ -605,7 +606,7 @@ void ConversationManager::queueRelaySpool(const QJsonObject &relay, TransportPol
 void ConversationManager::handleRelay(TransportType type, const QString &transportPeerKey, const QJsonObject &object) {
     QJsonObject inner;
     if (!protocol::verifyRelay(object, &inner)) {
-        emit protocolError(QStringLiteral("Relay P2P rifiutato: firma/header non validi"));
+        emit protocolError(QCoreApplication::translate("EChat", "Relay P2P rifiutato: firma/header non validi"));
         return;
     }
 
@@ -731,7 +732,7 @@ void ConversationManager::retryOutbox() {
         if (entry.expiresAtMs <= now) {
             if (entry.kind == QStringLiteral("message")) {
                 db_.updateDelivery(entry.logicalId, entry.targetId, QStringLiteral("expired"));
-                emit deliveryInfo(entry.logicalId, QStringLiteral("consegna scaduta verso %1").arg(entry.targetId));
+                emit deliveryInfo(entry.logicalId, QCoreApplication::translate("EChat", "consegna scaduta verso %1").arg(entry.targetId));
             }
             db_.deleteOutbox(entry.id);
             emit reliabilityStateChanged();
@@ -758,7 +759,7 @@ void ConversationManager::retryOutbox() {
             } else {
                 db_.updateDelivery(entry.logicalId, entry.targetId, QStringLiteral("sent"), route);
                 db_.updateOutboxRetry(entry.id, now + retryDelayMs(attempts, true), attempts);
-                emit deliveryInfo(entry.logicalId, QStringLiteral("ritentato via %1 · attesa ACK").arg(route));
+                emit deliveryInfo(entry.logicalId, QCoreApplication::translate("EChat", "ritentato via %1 · attesa ACK").arg(route));
             }
         } else {
             if (entry.kind == QStringLiteral("message"))

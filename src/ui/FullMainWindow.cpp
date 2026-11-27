@@ -6,6 +6,7 @@
 #include "transport/TransportManager.h"
 #include "transport/bluetooth/BluetoothTransport.h"
 
+#include <QCoreApplication>
 #include <QAbstractItemView>
 #include <QComboBox>
 #include <QDateTime>
@@ -42,10 +43,10 @@ QString initials(const QString &name) {
 
 QString transportSummary(const RouteState &routes) {
     QStringList available;
-    if (routes.bluetooth) available << QStringLiteral("Bluetooth");
-    if (routes.lan) available << QStringLiteral("LAN");
-    if (routes.internet) available << QStringLiteral("Internet");
-    return available.isEmpty() ? QStringLiteral("offline") : available.join(QStringLiteral(" + "));
+    if (routes.bluetooth) available << QCoreApplication::translate("EChat", "Bluetooth");
+    if (routes.lan) available << QCoreApplication::translate("EChat", "LAN");
+    if (routes.internet) available << QCoreApplication::translate("EChat", "Internet");
+    return available.isEmpty() ? QCoreApplication::translate("EChat", "offline") : available.join(QStringLiteral(" + "));
 }
 
 } // namespace
@@ -55,7 +56,7 @@ FullMainWindow::FullMainWindow(const LocalIdentity &identity, CryptoEngine &cryp
                                BluetoothTransport &bluetooth, QWidget *parent)
     : QMainWindow(parent), identity_(identity), crypto_(crypto), peers_(peers), conversations_(conversations),
       transports_(transports), bluetooth_(bluetooth) {
-    setWindowTitle(QStringLiteral("EChat Full — Easy Chat"));
+    setWindowTitle(QCoreApplication::translate("EChat", "EChat Full — Easy Chat"));
     resize(1480, 900);
     setMinimumSize(1120, 680);
 
@@ -86,10 +87,10 @@ FullMainWindow::FullMainWindow(const LocalIdentity &identity, CryptoEngine &cryp
         return button;
     };
 
-    auto *newChatRail = makeRailButton(QStringLiteral("+C"), QStringLiteral("Nuova chat"));
-    auto *newGroupRail = makeRailButton(QStringLiteral("+G"), QStringLiteral("Nuovo gruppo"));
-    auto *bluetoothRail = makeRailButton(QStringLiteral("BT"), QStringLiteral("Bluetooth"));
-    auto *lightRail = makeRailButton(QStringLiteral("L"), QStringLiteral("Passa a EChat Light"));
+    auto *newChatRail = makeRailButton(QStringLiteral("+C"), QCoreApplication::translate("EChat", "Nuova chat"));
+    auto *newGroupRail = makeRailButton(QStringLiteral("+G"), QCoreApplication::translate("EChat", "Nuovo gruppo"));
+    auto *bluetoothRail = makeRailButton(QStringLiteral("BT"), QCoreApplication::translate("EChat", "Bluetooth"));
+    auto *lightRail = makeRailButton(QStringLiteral("L"), QCoreApplication::translate("EChat", "Passa a EChat Light"));
     railLayout->addWidget(newChatRail, 0, Qt::AlignHCenter);
     railLayout->addWidget(newGroupRail, 0, Qt::AlignHCenter);
     railLayout->addWidget(bluetoothRail, 0, Qt::AlignHCenter);
@@ -111,13 +112,13 @@ FullMainWindow::FullMainWindow(const LocalIdentity &identity, CryptoEngine &cryp
     profileAvatar->setAlignment(Qt::AlignCenter);
     profileAvatar->setFixedSize(42, 42);
     auto *profileText = new QVBoxLayout;
-    auto *profileName = new QLabel(QStringLiteral("EChat Full"));
+    auto *profileName = new QLabel(QCoreApplication::translate("EChat", "EChat Full"));
     profileName->setObjectName("sidebarTitle");
     userLabel_ = new QLabel(QStringLiteral("@%1").arg(identity_.username));
     userLabel_->setObjectName("mutedLabel");
     profileText->addWidget(profileName);
     profileText->addWidget(userLabel_);
-    auto *accountButton = new QPushButton(QStringLiteral("Account"));
+    auto *accountButton = new QPushButton(QCoreApplication::translate("EChat", "Account"));
     accountButton->setObjectName("ghostButton");
     profileRow->addWidget(profileAvatar);
     profileRow->addLayout(profileText, 1);
@@ -125,15 +126,15 @@ FullMainWindow::FullMainWindow(const LocalIdentity &identity, CryptoEngine &cryp
     side->addLayout(profileRow);
 
     searchEdit_ = new QLineEdit;
-    searchEdit_->setPlaceholderText(QStringLiteral("Cerca chat, gruppi o persone"));
+    searchEdit_->setPlaceholderText(QCoreApplication::translate("EChat", "Cerca chat, gruppi o persone"));
     searchEdit_->setObjectName("fullSearch");
     side->addWidget(searchEdit_);
 
     auto *filters = new QHBoxLayout;
     filters->setSpacing(6);
-    allFilterButton_ = new QPushButton(QStringLiteral("Tutte"));
-    directFilterButton_ = new QPushButton(QStringLiteral("Chat"));
-    groupFilterButton_ = new QPushButton(QStringLiteral("Gruppi"));
+    allFilterButton_ = new QPushButton(QCoreApplication::translate("EChat", "Tutte"));
+    directFilterButton_ = new QPushButton(QCoreApplication::translate("EChat", "Chat"));
+    groupFilterButton_ = new QPushButton(QCoreApplication::translate("EChat", "Gruppi"));
     for (auto *button : {allFilterButton_, directFilterButton_, groupFilterButton_}) {
         button->setCheckable(true);
         button->setObjectName("filterButton");
@@ -148,8 +149,8 @@ FullMainWindow::FullMainWindow(const LocalIdentity &identity, CryptoEngine &cryp
     side->addWidget(conversationList_, 1);
 
     auto *newRow = new QHBoxLayout;
-    auto *newChatButton = new QPushButton(QStringLiteral("+ Chat"));
-    auto *newGroupButton = new QPushButton(QStringLiteral("+ Gruppo"));
+    auto *newChatButton = new QPushButton(QCoreApplication::translate("EChat", "+ Chat"));
+    auto *newGroupButton = new QPushButton(QCoreApplication::translate("EChat", "+ Gruppo"));
     newChatButton->setObjectName("secondaryButton");
     newGroupButton->setObjectName("secondaryButton");
     newRow->addWidget(newChatButton);
@@ -175,16 +176,16 @@ FullMainWindow::FullMainWindow(const LocalIdentity &identity, CryptoEngine &cryp
     avatar->setFixedSize(46, 46);
     auto *headerText = new QVBoxLayout;
     headerText->setSpacing(2);
-    conversationTitle_ = new QLabel(QStringLiteral("Seleziona una conversazione"));
+    conversationTitle_ = new QLabel(QCoreApplication::translate("EChat", "Seleziona una conversazione"));
     conversationTitle_->setObjectName("fullConversationTitle");
-    conversationSubtitle_ = new QLabel(QStringLiteral("EChat Full · stessa rete, crittografia e cronologia della modalità Light"));
+    conversationSubtitle_ = new QLabel(QCoreApplication::translate("EChat", "EChat Full · stessa rete, crittografia e cronologia della modalità Light"));
     conversationSubtitle_->setObjectName("mutedLabel");
     headerText->addWidget(conversationTitle_);
     headerText->addWidget(conversationSubtitle_);
-    manageGroupButton_ = new QPushButton(QStringLiteral("Gestisci gruppo"));
+    manageGroupButton_ = new QPushButton(QCoreApplication::translate("EChat", "Gestisci gruppo"));
     manageGroupButton_->setObjectName("ghostButton");
     manageGroupButton_->setVisible(false);
-    auto *lightButton = new QPushButton(QStringLiteral("Light"));
+    auto *lightButton = new QPushButton(QCoreApplication::translate("EChat", "Light"));
     lightButton->setObjectName("ghostButton");
     headerLayout->addWidget(avatar);
     headerLayout->addLayout(headerText, 1);
@@ -205,15 +206,15 @@ FullMainWindow::FullMainWindow(const LocalIdentity &identity, CryptoEngine &cryp
     composer->setSpacing(10);
     messageEdit_ = new QLineEdit;
     messageEdit_->setObjectName("fullMessageEdit");
-    messageEdit_->setPlaceholderText(QStringLiteral("Scrivi un messaggio…"));
-    auto *sendButton = new QPushButton(QStringLiteral("Invia"));
+    messageEdit_->setPlaceholderText(QCoreApplication::translate("EChat", "Scrivi un messaggio…"));
+    auto *sendButton = new QPushButton(QCoreApplication::translate("EChat", "Invia"));
     sendButton->setObjectName("primaryButton");
     sendButton->setMinimumWidth(94);
     composer->addWidget(messageEdit_, 1);
     composer->addWidget(sendButton);
     chatLayout->addWidget(composerWrap);
 
-    statusLabel_ = new QLabel(QStringLiteral("Pronto"));
+    statusLabel_ = new QLabel(QCoreApplication::translate("EChat", "Pronto"));
     statusLabel_->setObjectName("fullStatus");
     statusLabel_->setContentsMargins(20, 5, 20, 6);
     chatLayout->addWidget(statusLabel_);
@@ -227,7 +228,7 @@ FullMainWindow::FullMainWindow(const LocalIdentity &identity, CryptoEngine &cryp
     detailsLayout->setContentsMargins(18, 18, 18, 18);
     detailsLayout->setSpacing(10);
 
-    detailsTitle_ = new QLabel(QStringLiteral("Dettagli"));
+    detailsTitle_ = new QLabel(QCoreApplication::translate("EChat", "Dettagli"));
     detailsTitle_->setObjectName("detailsTitle");
     detailsLayout->addWidget(detailsTitle_);
 
@@ -236,21 +237,21 @@ FullMainWindow::FullMainWindow(const LocalIdentity &identity, CryptoEngine &cryp
     auto *networkLayout = new QVBoxLayout(networkCard);
     networkLayout->setContentsMargins(12, 12, 12, 12);
     networkLayout->setSpacing(6);
-    auto *networkTitle = new QLabel(QStringLiteral("Connessione"));
+    auto *networkTitle = new QLabel(QCoreApplication::translate("EChat", "Connessione"));
     networkTitle->setObjectName("cardTitle");
-    routeLabel_ = new QLabel(QStringLiteral("Nessuna route"));
+    routeLabel_ = new QLabel(QCoreApplication::translate("EChat", "Nessuna route"));
     routeLabel_->setObjectName("cardBody");
     routeLabel_->setWordWrap(true);
     queueLabel_ = new QLabel(conversations_.reliabilitySummary());
     queueLabel_->setObjectName("mutedLabel");
     policyBox_ = new QComboBox;
-    policyBox_->addItem(QStringLiteral("Auto"), static_cast<int>(TransportPolicy::Auto));
-    policyBox_->addItem(QStringLiteral("Solo Bluetooth"), static_cast<int>(TransportPolicy::BluetoothOnly));
-    policyBox_->addItem(QStringLiteral("Solo LAN"), static_cast<int>(TransportPolicy::LanOnly));
-    policyBox_->addItem(QStringLiteral("Solo Internet"), static_cast<int>(TransportPolicy::InternetOnly));
-    policyBox_->addItem(QStringLiteral("Preferisci Bluetooth"), static_cast<int>(TransportPolicy::PreferBluetooth));
-    policyBox_->addItem(QStringLiteral("Preferisci LAN"), static_cast<int>(TransportPolicy::PreferLan));
-    policyBox_->addItem(QStringLiteral("Preferisci Internet"), static_cast<int>(TransportPolicy::PreferInternet));
+    policyBox_->addItem(QCoreApplication::translate("EChat", "Auto"), static_cast<int>(TransportPolicy::Auto));
+    policyBox_->addItem(QCoreApplication::translate("EChat", "Solo Bluetooth"), static_cast<int>(TransportPolicy::BluetoothOnly));
+    policyBox_->addItem(QCoreApplication::translate("EChat", "Solo LAN"), static_cast<int>(TransportPolicy::LanOnly));
+    policyBox_->addItem(QCoreApplication::translate("EChat", "Solo Internet"), static_cast<int>(TransportPolicy::InternetOnly));
+    policyBox_->addItem(QCoreApplication::translate("EChat", "Preferisci Bluetooth"), static_cast<int>(TransportPolicy::PreferBluetooth));
+    policyBox_->addItem(QCoreApplication::translate("EChat", "Preferisci LAN"), static_cast<int>(TransportPolicy::PreferLan));
+    policyBox_->addItem(QCoreApplication::translate("EChat", "Preferisci Internet"), static_cast<int>(TransportPolicy::PreferInternet));
     networkLayout->addWidget(networkTitle);
     networkLayout->addWidget(routeLabel_);
     networkLayout->addWidget(queueLabel_);
@@ -262,9 +263,9 @@ FullMainWindow::FullMainWindow(const LocalIdentity &identity, CryptoEngine &cryp
     auto *securityLayout = new QVBoxLayout(securityCard);
     securityLayout->setContentsMargins(12, 12, 12, 12);
     securityLayout->setSpacing(5);
-    auto *securityTitle = new QLabel(QStringLiteral("Sicurezza"));
+    auto *securityTitle = new QLabel(QCoreApplication::translate("EChat", "Sicurezza"));
     securityTitle->setObjectName("cardTitle");
-    securityLabel_ = new QLabel(QStringLiteral("E2EE v2"));
+    securityLabel_ = new QLabel(QCoreApplication::translate("EChat", "E2EE v2"));
     securityLabel_->setObjectName("cardBody");
     securityLabel_->setWordWrap(true);
     securityLayout->addWidget(securityTitle);
@@ -276,7 +277,7 @@ FullMainWindow::FullMainWindow(const LocalIdentity &identity, CryptoEngine &cryp
     auto *membersLayout = new QVBoxLayout(membersCard);
     membersLayout->setContentsMargins(12, 12, 12, 12);
     membersLayout->setSpacing(6);
-    auto *membersTitle = new QLabel(QStringLiteral("Persone"));
+    auto *membersTitle = new QLabel(QCoreApplication::translate("EChat", "Persone"));
     membersTitle->setObjectName("cardTitle");
     membersList_ = new QListWidget;
     membersList_->setObjectName("membersList");
@@ -285,7 +286,7 @@ FullMainWindow::FullMainWindow(const LocalIdentity &identity, CryptoEngine &cryp
     membersLayout->addWidget(membersList_);
     detailsLayout->addWidget(membersCard, 1);
 
-    auto *bluetoothButton = new QPushButton(QStringLiteral("Cerca dispositivi Bluetooth"));
+    auto *bluetoothButton = new QPushButton(QCoreApplication::translate("EChat", "Cerca dispositivi Bluetooth"));
     bluetoothButton->setObjectName("secondaryButton");
     detailsLayout->addWidget(bluetoothButton);
 
@@ -358,7 +359,7 @@ FullMainWindow::FullMainWindow(const LocalIdentity &identity, CryptoEngine &cryp
     connect(&conversations_, &ConversationManager::localUsernameChanged, this, [this](const QString &username) {
         identity_.username = username;
         userLabel_->setText(QStringLiteral("@%1").arg(username));
-        statusLabel_->setText(QStringLiteral("Username aggiornato: @%1").arg(username));
+        statusLabel_->setText(QCoreApplication::translate("EChat", "Username aggiornato: @%1").arg(username));
         refreshDetails();
     });
     connect(&conversations_, &ConversationManager::deliveryInfo, this, [this](const QString &, const QString &info) {
@@ -381,7 +382,7 @@ FullMainWindow::FullMainWindow(const LocalIdentity &identity, CryptoEngine &cryp
     });
     connect(&peers_, &PeerManager::securityWarning, this, [this](const QString &warning) {
         statusLabel_->setText(warning);
-        QMessageBox::warning(this, QStringLiteral("EChat — sicurezza"), warning);
+        QMessageBox::warning(this, QCoreApplication::translate("EChat", "EChat — sicurezza"), warning);
     });
     connect(&transports_, &TransportManager::statusMessage, statusLabel_, &QLabel::setText);
     connect(&bluetooth_, &BluetoothTransport::connectionChanged, this, [this](const QString &, bool) {
@@ -473,14 +474,14 @@ void FullMainWindow::refreshConversations() {
 
         QString subtitle;
         if (conversation.type == ConversationType::Group) {
-            subtitle = QStringLiteral("Gruppo · %1 membri").arg(conversation.memberIds.size());
+            subtitle = QCoreApplication::translate("EChat", "Gruppo · %1 membri").arg(conversation.memberIds.size());
         } else {
             for (const auto &id : conversation.memberIds) {
                 if (id == identity_.userId || !peers_.hasPeer(id)) continue;
                 subtitle = transportSummary(transports_.routesFor(peers_.peer(id)));
                 break;
             }
-            if (subtitle.isEmpty()) subtitle = QStringLiteral("Chat diretta");
+            if (subtitle.isEmpty()) subtitle = QCoreApplication::translate("EChat", "Chat diretta");
         }
 
         const QString prefix = conversation.type == ConversationType::Group ? QStringLiteral("#  ") : QStringLiteral("●  ");
@@ -507,8 +508,8 @@ void FullMainWindow::selectConversation(const QString &id) {
 
 void FullMainWindow::refreshHeader() {
     if (currentConversationId_.isEmpty()) {
-        conversationTitle_->setText(QStringLiteral("Seleziona una conversazione"));
-        conversationSubtitle_->setText(QStringLiteral("Le modalità Light e Full condividono account, messaggi e rete"));
+        conversationTitle_->setText(QCoreApplication::translate("EChat", "Seleziona una conversazione"));
+        conversationSubtitle_->setText(QCoreApplication::translate("EChat", "Le modalità Light e Full condividono account, messaggi e rete"));
         manageGroupButton_->setVisible(false);
         return;
     }
@@ -520,7 +521,7 @@ void FullMainWindow::refreshHeader() {
     manageGroupButton_->setVisible(conversation.type == ConversationType::Group);
 
     if (conversation.type == ConversationType::Group) {
-        conversationSubtitle_->setText(QStringLiteral("%1 membri · E2EE fan-out · mesh P2P")
+        conversationSubtitle_->setText(QCoreApplication::translate("EChat", "%1 membri · E2EE fan-out · mesh P2P")
                                            .arg(conversation.memberIds.size()));
         return;
     }
@@ -532,17 +533,16 @@ void FullMainWindow::refreshHeader() {
         conversationSubtitle_->setText(QStringLiteral("%1 · %2")
                                            .arg(transportSummary(routes))
                                            .arg(peer.identityFingerprint.isEmpty()
-                                                    ? QStringLiteral("fingerprint non disponibile")
+                                                    ? QCoreApplication::translate("EChat", "fingerprint non disponibile")
                                                     : peer.identityFingerprint));
         return;
     }
-    conversationSubtitle_->setText(QStringLiteral("Peer non ancora disponibile"));
+    conversationSubtitle_->setText(QCoreApplication::translate("EChat", "Peer non ancora disponibile"));
 }
 
 void FullMainWindow::refreshMessages() {
     if (currentConversationId_.isEmpty()) {
-        messages_->setHtml(QStringLiteral(
-            "<html><body style='font-family:sans-serif;background:#0f1115;color:#8f99a8;'>"
+        messages_->setHtml(QCoreApplication::translate("EChat", "<html><body style='font-family:sans-serif;background:#0f1115;color:#8f99a8;'>"
             "<div style='text-align:center;margin-top:150px;font-size:15px;'>Scegli una chat dalla colonna a sinistra.</div>"
             "</body></html>"));
         return;
@@ -553,7 +553,7 @@ void FullMainWindow::refreshMessages() {
     QString lastDay;
     for (const auto &message : items) {
         const bool mine = message.senderId == identity_.userId;
-        QString sender = mine ? QStringLiteral("Tu") : message.senderId;
+        QString sender = mine ? QCoreApplication::translate("EChat", "Tu") : message.senderId;
         if (peers_.hasPeer(message.senderId)) sender = displayNameForPeer(peers_.peer(message.senderId));
 
         const QDateTime when = QDateTime::fromMSecsSinceEpoch(message.timestampMs).toLocalTime();
@@ -571,7 +571,7 @@ void FullMainWindow::refreshMessages() {
         const QString background = mine ? QStringLiteral("#384997") : QStringLiteral("#20242c");
         const QString border = mine ? QStringLiteral("#4d5fb6") : QStringLiteral("#2f3540");
         const QString deleteAction = mine
-            ? QStringLiteral(" · <a href=\"echat-delete:%1\" style=\"color:#dce1ff;text-decoration:none;\">Elimina</a>")
+            ? QCoreApplication::translate("EChat", " · <a href=\"echat-delete:%1\" style=\"color:#dce1ff;text-decoration:none;\">Elimina</a>")
                   .arg(message.id.toHtmlEscaped())
             : QString();
 
@@ -587,7 +587,7 @@ void FullMainWindow::refreshMessages() {
                     .arg(align).arg(background).arg(border).arg(sender.toHtmlEscaped()).arg(meta.toHtmlEscaped()).arg(deleteAction).arg(body);
     }
     if (items.isEmpty()) {
-        html += QStringLiteral("<div style='text-align:center;margin-top:120px;color:#7f8998;'>Nessun messaggio. Scrivi il primo messaggio.</div>");
+        html += QCoreApplication::translate("EChat", "<div style='text-align:center;margin-top:120px;color:#7f8998;'>Nessun messaggio. Scrivi il primo messaggio.</div>");
     }
     html += QStringLiteral("</body></html>");
     messages_->setHtml(html);
@@ -597,35 +597,35 @@ void FullMainWindow::refreshMessages() {
 void FullMainWindow::refreshDetails() {
     membersList_->clear();
     if (currentConversationId_.isEmpty()) {
-        detailsTitle_->setText(QStringLiteral("Dettagli"));
-        securityLabel_->setText(QStringLiteral("E2EE v2 · Ed25519 + X25519 + XChaCha20-Poly1305"));
-        auto *item = new QListWidgetItem(QStringLiteral("Seleziona una conversazione"), membersList_);
+        detailsTitle_->setText(QCoreApplication::translate("EChat", "Dettagli"));
+        securityLabel_->setText(QCoreApplication::translate("EChat", "E2EE v2 · Ed25519 + X25519 + XChaCha20-Poly1305"));
+        auto *item = new QListWidgetItem(QCoreApplication::translate("EChat", "Seleziona una conversazione"), membersList_);
         item->setFlags(Qt::NoItemFlags);
         return;
     }
 
     const Conversation conversation = conversations_.conversation(currentConversationId_);
-    detailsTitle_->setText(conversation.type == ConversationType::Group ? QStringLiteral("Dettagli gruppo")
-                                                                        : QStringLiteral("Dettagli chat"));
+    detailsTitle_->setText(conversation.type == ConversationType::Group ? QCoreApplication::translate("EChat", "Dettagli gruppo")
+                                                                        : QCoreApplication::translate("EChat", "Dettagli chat"));
 
     if (conversation.type == ConversationType::Group) {
-        securityLabel_->setText(QStringLiteral("E2EE v2 · fan-out cifrato per destinatario · relay firmato"));
+        securityLabel_->setText(QCoreApplication::translate("EChat", "E2EE v2 · fan-out cifrato per destinatario · relay firmato"));
     } else {
-        securityLabel_->setText(QStringLiteral("E2EE v2 · Ed25519 + X25519 + XChaCha20-Poly1305"));
+        securityLabel_->setText(QCoreApplication::translate("EChat", "E2EE v2 · Ed25519 + X25519 + XChaCha20-Poly1305"));
     }
 
     for (const auto &id : conversation.memberIds) {
         QString label;
         QString toolTip = id;
         if (id == identity_.userId) {
-            label = QStringLiteral("Tu · @%1").arg(identity_.username);
+            label = QCoreApplication::translate("EChat", "Tu · @%1").arg(identity_.username);
         } else if (peers_.hasPeer(id)) {
             const Peer peer = peers_.peer(id);
             const QString route = transportSummary(transports_.routesFor(peer));
             label = QStringLiteral("%1 · %2").arg(displayNameForPeer(peer)).arg(route);
             toolTip = peer.identityFingerprint.isEmpty() ? id : peer.identityFingerprint;
         } else {
-            label = QStringLiteral("%1 · sconosciuto").arg(id.left(12));
+            label = QCoreApplication::translate("EChat", "%1 · sconosciuto").arg(id.left(12));
         }
         auto *item = new QListWidgetItem(label, membersList_);
         item->setToolTip(toolTip);
@@ -635,7 +635,7 @@ void FullMainWindow::refreshDetails() {
 void FullMainWindow::refreshRouteStatus() {
     queueLabel_->setText(conversations_.reliabilitySummary());
     if (currentConversationId_.isEmpty()) {
-        routeLabel_->setText(QStringLiteral("Nessuna conversazione selezionata"));
+        routeLabel_->setText(QCoreApplication::translate("EChat", "Nessuna conversazione selezionata"));
         return;
     }
 
@@ -659,21 +659,21 @@ void FullMainWindow::refreshRouteStatus() {
     }
 
     if (recipients == 0) {
-        routeLabel_->setText(QStringLiteral("Nessun destinatario raggiungibile"));
+        routeLabel_->setText(QCoreApplication::translate("EChat", "Nessun destinatario raggiungibile"));
         return;
     }
 
-    routeLabel_->setText(QStringLiteral("BT %1/%5 · LAN %2/%5 · Internet %3/%5 · Relay %4/%5")
+    routeLabel_->setText(QCoreApplication::translate("EChat", "BT %1/%5 · LAN %2/%5 · Internet %3/%5 · Relay %4/%5")
                              .arg(bluetooth).arg(lan).arg(internet).arg(mesh).arg(recipients));
     refreshDetails();
 }
 
 void FullMainWindow::createDirectChat() {
     QDialog dialog(this);
-    dialog.setWindowTitle(QStringLiteral("Nuova chat EChat"));
+    dialog.setWindowTitle(QCoreApplication::translate("EChat", "Nuova chat EChat"));
     dialog.resize(540, 500);
     QVBoxLayout layout(&dialog);
-    auto *info = new QLabel(QStringLiteral("Peer conosciuti tramite HELLO firmata"));
+    auto *info = new QLabel(QCoreApplication::translate("EChat", "Peer conosciuti tramite HELLO firmata"));
     info->setObjectName("mutedLabel");
     QListWidget list;
     for (const auto &peer : peers_.peers()) {
@@ -695,11 +695,11 @@ void FullMainWindow::createDirectChat() {
 
 void FullMainWindow::createGroup() {
     QDialog dialog(this);
-    dialog.setWindowTitle(QStringLiteral("Nuovo gruppo EChat"));
+    dialog.setWindowTitle(QCoreApplication::translate("EChat", "Nuovo gruppo EChat"));
     dialog.resize(560, 570);
     QVBoxLayout layout(&dialog);
     QLineEdit name;
-    name.setPlaceholderText(QStringLiteral("Nome gruppo"));
+    name.setPlaceholderText(QCoreApplication::translate("EChat", "Nome gruppo"));
     name.setMaxLength(80);
     QListWidget members;
     members.setSelectionMode(QAbstractItemView::MultiSelection);
@@ -710,7 +710,7 @@ void FullMainWindow::createGroup() {
     }
     QDialogButtonBox buttons(QDialogButtonBox::Ok | QDialogButtonBox::Cancel);
     layout.addWidget(&name);
-    layout.addWidget(new QLabel(QStringLiteral("Membri")));
+    layout.addWidget(new QLabel(QCoreApplication::translate("EChat", "Membri")));
     layout.addWidget(&members, 1);
     layout.addWidget(&buttons);
     connect(&buttons, &QDialogButtonBox::accepted, &dialog, &QDialog::accept);
@@ -720,7 +720,7 @@ void FullMainWindow::createGroup() {
     QStringList ids;
     for (auto *item : members.selectedItems()) ids << item->data(Qt::UserRole).toString();
     if (ids.isEmpty()) {
-        QMessageBox::information(this, QStringLiteral("EChat"), QStringLiteral("Seleziona almeno un altro membro."));
+        QMessageBox::information(this, QStringLiteral("EChat"), QCoreApplication::translate("EChat", "Seleziona almeno un altro membro."));
         return;
     }
     const QString id = conversations_.createGroup(name.text(), ids);
@@ -734,20 +734,20 @@ void FullMainWindow::manageCurrentGroup() {
     if (conversation.type != ConversationType::Group) return;
 
     QDialog dialog(this);
-    dialog.setWindowTitle(QStringLiteral("Gestisci gruppo — %1").arg(conversation.name));
+    dialog.setWindowTitle(QCoreApplication::translate("EChat", "Gestisci gruppo — %1").arg(conversation.name));
     dialog.resize(580, 650);
     auto *layout = new QVBoxLayout(&dialog);
     auto *nameEdit = new QLineEdit(conversation.name);
     nameEdit->setMaxLength(80);
-    layout->addWidget(new QLabel(QStringLiteral("Nome gruppo")));
+    layout->addWidget(new QLabel(QCoreApplication::translate("EChat", "Nome gruppo")));
     layout->addWidget(nameEdit);
 
-    layout->addWidget(new QLabel(QStringLiteral("Membri attuali")));
+    layout->addWidget(new QLabel(QCoreApplication::translate("EChat", "Membri attuali")));
     auto *currentMembers = new QListWidget;
     currentMembers->setSelectionMode(QAbstractItemView::NoSelection);
     for (const auto &id : conversation.memberIds) {
         QString label;
-        if (id == identity_.userId) label = QStringLiteral("Tu (@%1)").arg(identity_.username);
+        if (id == identity_.userId) label = QCoreApplication::translate("EChat", "Tu (@%1)").arg(identity_.username);
         else if (peers_.hasPeer(id)) label = QStringLiteral("@%1").arg(displayNameForPeer(peers_.peer(id)));
         else label = id;
         auto *item = new QListWidgetItem(label, currentMembers);
@@ -755,7 +755,7 @@ void FullMainWindow::manageCurrentGroup() {
     }
     layout->addWidget(currentMembers, 1);
 
-    layout->addWidget(new QLabel(QStringLiteral("Aggiungi persone")));
+    layout->addWidget(new QLabel(QCoreApplication::translate("EChat", "Aggiungi persone")));
     auto *available = new QListWidget;
     available->setSelectionMode(QAbstractItemView::MultiSelection);
     int availableCount = 0;
@@ -767,13 +767,13 @@ void FullMainWindow::manageCurrentGroup() {
         ++availableCount;
     }
     if (availableCount == 0) {
-        auto *empty = new QListWidgetItem(QStringLiteral("Nessun altro peer conosciuto"), available);
+        auto *empty = new QListWidgetItem(QCoreApplication::translate("EChat", "Nessun altro peer conosciuto"), available);
         empty->setFlags(Qt::NoItemFlags);
     }
     layout->addWidget(available, 1);
 
     QDialogButtonBox buttons(QDialogButtonBox::Save | QDialogButtonBox::Cancel);
-    if (auto *save = buttons.button(QDialogButtonBox::Save)) save->setText(QStringLiteral("Salva"));
+    if (auto *save = buttons.button(QDialogButtonBox::Save)) save->setText(QCoreApplication::translate("EChat", "Salva"));
     layout->addWidget(&buttons);
     connect(&buttons, &QDialogButtonBox::accepted, &dialog, &QDialog::accept);
     connect(&buttons, &QDialogButtonBox::rejected, &dialog, &QDialog::reject);
@@ -785,19 +785,19 @@ void FullMainWindow::manageCurrentGroup() {
         if (!id.isEmpty()) added << id;
     }
     if (conversations_.updateGroup(conversation.id, nameEdit->text(), added, selectedPolicy())) {
-        statusLabel_->setText(QStringLiteral("Gruppo aggiornato"));
+        statusLabel_->setText(QCoreApplication::translate("EChat", "Gruppo aggiornato"));
         refreshHeader();
         refreshConversations();
         refreshDetails();
         refreshRouteStatus();
     } else {
-        statusLabel_->setText(QStringLiteral("Nessuna modifica al gruppo"));
+        statusLabel_->setText(QCoreApplication::translate("EChat", "Nessuna modifica al gruppo"));
     }
 }
 
 void FullMainWindow::openAccountSettings() {
     QDialog dialog(this);
-    dialog.setWindowTitle(QStringLiteral("Account EChat"));
+    dialog.setWindowTitle(QCoreApplication::translate("EChat", "Account EChat"));
     dialog.resize(570, 320);
     auto *layout = new QVBoxLayout(&dialog);
     auto *form = new QFormLayout;
@@ -807,17 +807,17 @@ void FullMainWindow::openAccountSettings() {
     userId->setReadOnly(true);
     auto *fingerprint = new QLineEdit(crypto_.fingerprint(identity_.signingPublicKey, identity_.kxPublicKey));
     fingerprint->setReadOnly(true);
-    form->addRow(QStringLiteral("Username"), username);
-    form->addRow(QStringLiteral("User ID"), userId);
-    form->addRow(QStringLiteral("Fingerprint"), fingerprint);
+    form->addRow(QCoreApplication::translate("EChat", "Username"), username);
+    form->addRow(QCoreApplication::translate("EChat", "User ID"), userId);
+    form->addRow(QCoreApplication::translate("EChat", "Fingerprint"), fingerprint);
     layout->addLayout(form);
-    auto *info = new QLabel(QStringLiteral("Light e Full usano lo stesso account locale. Cambiare username non ruota le chiavi."));
+    auto *info = new QLabel(QCoreApplication::translate("EChat", "Light e Full usano lo stesso account locale. Cambiare username non ruota le chiavi."));
     info->setWordWrap(true);
     layout->addWidget(info);
     layout->addStretch();
 
     QDialogButtonBox buttons(QDialogButtonBox::Save | QDialogButtonBox::Cancel);
-    if (auto *save = buttons.button(QDialogButtonBox::Save)) save->setText(QStringLiteral("Salva"));
+    if (auto *save = buttons.button(QDialogButtonBox::Save)) save->setText(QCoreApplication::translate("EChat", "Salva"));
     layout->addWidget(&buttons);
     connect(&buttons, &QDialogButtonBox::accepted, &dialog, &QDialog::accept);
     connect(&buttons, &QDialogButtonBox::rejected, &dialog, &QDialog::reject);
@@ -825,23 +825,23 @@ void FullMainWindow::openAccountSettings() {
 
     const QString next = username->text().trimmed();
     if (next.isEmpty()) {
-        QMessageBox::information(this, QStringLiteral("EChat"), QStringLiteral("Lo username non puo' essere vuoto."));
+        QMessageBox::information(this, QStringLiteral("EChat"), QCoreApplication::translate("EChat", "Lo username non puo' essere vuoto."));
         return;
     }
     if (next != identity_.username && !conversations_.changeUsername(next)) {
-        QMessageBox::warning(this, QStringLiteral("EChat"), QStringLiteral("Username non valido o non modificato."));
+        QMessageBox::warning(this, QStringLiteral("EChat"), QCoreApplication::translate("EChat", "Username non valido o non modificato."));
     }
 }
 
 void FullMainWindow::openBluetoothScanner() {
     auto *dialog = new QDialog(this);
     dialog->setAttribute(Qt::WA_DeleteOnClose);
-    dialog->setWindowTitle(QStringLiteral("EChat — Bluetooth"));
+    dialog->setWindowTitle(QCoreApplication::translate("EChat", "EChat — Bluetooth"));
     auto *layout = new QVBoxLayout(dialog);
-    auto *info = new QLabel(QStringLiteral("Bluetooth Classic/RFCOMM. È consigliato associare prima i PC dal sistema operativo."));
+    auto *info = new QLabel(QCoreApplication::translate("EChat", "Bluetooth Classic/RFCOMM. È consigliato associare prima i PC dal sistema operativo."));
     info->setWordWrap(true);
     auto *list = new QListWidget;
-    auto *connectButton = new QPushButton(QStringLiteral("Connetti"));
+    auto *connectButton = new QPushButton(QCoreApplication::translate("EChat", "Connetti"));
     connectButton->setObjectName("primaryButton");
     layout->addWidget(info);
     layout->addWidget(list, 1);
@@ -852,7 +852,7 @@ void FullMainWindow::openBluetoothScanner() {
         for (int i = 0; i < list->count(); ++i)
             if (list->item(i)->data(Qt::UserRole).toString() == address) return;
         auto *item = new QListWidgetItem(QStringLiteral("%1  [%2]")
-                                             .arg(name.isEmpty() ? QStringLiteral("Senza nome") : name).arg(address), list);
+                                             .arg(name.isEmpty() ? QCoreApplication::translate("EChat", "Senza nome") : name).arg(address), list);
         item->setData(Qt::UserRole, address);
     });
     connect(connectButton, &QPushButton::clicked, dialog, [this, list] {
@@ -868,18 +868,18 @@ void FullMainWindow::openBluetoothScanner() {
 void FullMainWindow::deleteMessageFromLink(const QString &messageId) {
     if (messageId.isEmpty()) return;
     const auto answer = QMessageBox::question(
-        this, QStringLiteral("Elimina messaggio"),
-        QStringLiteral("Eliminare questo messaggio per tutti i destinatari EChat?\n\n"
+        this, QCoreApplication::translate("EChat", "Elimina messaggio"),
+        QCoreApplication::translate("EChat", "Eliminare questo messaggio per tutti i destinatari EChat?\n\n"
                        "La richiesta verra' cifrata e ritentata anche se un destinatario e' temporaneamente offline."),
         QMessageBox::Yes | QMessageBox::No, QMessageBox::No);
     if (answer != QMessageBox::Yes) return;
 
     if (!conversations_.deleteOwnMessage(messageId, selectedPolicy())) {
         QMessageBox::warning(this, QStringLiteral("EChat"),
-                             QStringLiteral("Puoi eliminare solo i messaggi inviati da questo account."));
+                             QCoreApplication::translate("EChat", "Puoi eliminare solo i messaggi inviati da questo account."));
         return;
     }
-    statusLabel_->setText(QStringLiteral("Messaggio eliminato; propagazione E2EE accodata"));
+    statusLabel_->setText(QCoreApplication::translate("EChat", "Messaggio eliminato; propagazione E2EE accodata"));
     refreshMessages();
 }
 

@@ -1,6 +1,7 @@
 #include "transport/bluetooth/BluetoothTransport.h"
 #include "core/Protocol.h"
 
+#include <QCoreApplication>
 #include <QBluetoothLocalDevice>
 #include <QUuid>
 
@@ -27,7 +28,7 @@ BluetoothTransport::BluetoothTransport(QObject *parent)
     });
     connect(&server_, &QBluetoothServer::errorOccurred, this,
             [this](QBluetoothServer::Error) {
-                emit statusMessage(QStringLiteral("Errore Bluetooth server: codice %1").arg(static_cast<int>(server_.error())));
+                emit statusMessage(QCoreApplication::translate("EChat", "Errore Bluetooth server: codice %1").arg(static_cast<int>(server_.error())));
             });
 }
 
@@ -50,17 +51,17 @@ void BluetoothTransport::setIdentity(const LocalIdentity &identity) { identity_ 
 
 void BluetoothTransport::start() {
     if (!localAvailable()) {
-        emit statusMessage(QStringLiteral("Bluetooth non disponibile o spento"));
+        emit statusMessage(QCoreApplication::translate("EChat", "Bluetooth non disponibile o spento"));
         return;
     }
     if (server_.isListening()) return;
 
     serviceInfo_ = server_.listen(serviceUuid(), QStringLiteral("EC Easy Chat"));
     if (!server_.isListening()) {
-        emit statusMessage(QStringLiteral("Impossibile avviare il servizio Bluetooth EC"));
+        emit statusMessage(QCoreApplication::translate("EChat", "Impossibile avviare il servizio Bluetooth EC"));
         return;
     }
-    emit statusMessage(QStringLiteral("EC Bluetooth RFCOMM in ascolto"));
+    emit statusMessage(QCoreApplication::translate("EChat", "EC Bluetooth RFCOMM in ascolto"));
 }
 
 void BluetoothTransport::stop() {
@@ -73,13 +74,13 @@ void BluetoothTransport::stop() {
 
 void BluetoothTransport::scan() {
     if (!localAvailable()) {
-        emit statusMessage(QStringLiteral("Bluetooth non disponibile"));
+        emit statusMessage(QCoreApplication::translate("EChat", "Bluetooth non disponibile"));
         emit scanFinished();
         return;
     }
     if (discovery_.isActive()) discovery_.stop();
     discovery_.start(QBluetoothDeviceDiscoveryAgent::ClassicMethod);
-    emit statusMessage(QStringLiteral("Scansione Bluetooth Classic avviata"));
+    emit statusMessage(QCoreApplication::translate("EChat", "Scansione Bluetooth Classic avviata"));
 }
 
 void BluetoothTransport::connectToDevice(const QString &address) {
@@ -89,7 +90,7 @@ void BluetoothTransport::connectToDevice(const QString &address) {
     auto *socket = new QBluetoothSocket(QBluetoothServiceInfo::RfcommProtocol, this);
     attachSocket(socket);
     socket->connectToService(QBluetoothAddress(address), serviceUuid());
-    emit statusMessage(QStringLiteral("Connessione Bluetooth a %1...").arg(address));
+    emit statusMessage(QCoreApplication::translate("EChat", "Connessione Bluetooth a %1...").arg(address));
 }
 
 bool BluetoothTransport::sendFrame(const Peer &peer, const QByteArray &frame) {
@@ -115,7 +116,7 @@ void BluetoothTransport::attachSocket(QBluetoothSocket *socket) {
         const QString address = socket->peerAddress().toString();
         sendHello(socket);
         emit connectionChanged(address, true);
-        emit statusMessage(QStringLiteral("Bluetooth connesso: %1").arg(address));
+        emit statusMessage(QCoreApplication::translate("EChat", "Bluetooth connesso: %1").arg(address));
     });
 
     connect(socket, &QIODevice::readyRead, this, [this, socket] {
@@ -127,13 +128,13 @@ void BluetoothTransport::attachSocket(QBluetoothSocket *socket) {
         const QString address = socket->peerAddress().toString();
         sockets_.remove(socket);
         emit connectionChanged(address, false);
-        emit statusMessage(QStringLiteral("Bluetooth disconnesso: %1").arg(address));
+        emit statusMessage(QCoreApplication::translate("EChat", "Bluetooth disconnesso: %1").arg(address));
         socket->deleteLater();
     });
 
     connect(socket, &QBluetoothSocket::errorOccurred, this,
             [this, socket](QBluetoothSocket::SocketError) {
-                emit statusMessage(QStringLiteral("Bluetooth: %1").arg(socket->errorString()));
+                emit statusMessage(QCoreApplication::translate("EChat", "Bluetooth: %1").arg(socket->errorString()));
             });
 
     if (socket->state() == QBluetoothSocket::SocketState::ConnectedState) {

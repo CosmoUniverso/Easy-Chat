@@ -11,14 +11,18 @@
 
 #include <QApplication>
 #include <QColor>
+#include <QCoreApplication>
 #include <QDir>
 #include <QPalette>
 #include <QStyleFactory>
 #include <QFile>
 #include <QInputDialog>
+#include <QLibraryInfo>
+#include <QLocale>
 #include <QMessageBox>
 #include <QStandardPaths>
 #include <QSettings>
+#include <QTranslator>
 
 
 namespace {
@@ -115,6 +119,16 @@ void applyGlobalDarkTheme(QApplication &app) {
 
 int main(int argc, char *argv[]) {
     QApplication app(argc, argv);
+    QTranslator qtTranslation;
+    QTranslator appTranslation;
+    if (appTranslation.load(QLocale::system(), QStringLiteral("echat"),
+                            QStringLiteral("_"), QStringLiteral(":/i18n"))) {
+        const auto qtCatalog = QStringLiteral("qtbase_zh_CN");
+        if (qtTranslation.load(QStringLiteral(":/i18n/qtbase_zh_CN.qm")) ||
+            qtTranslation.load(qtCatalog, QLibraryInfo::path(QLibraryInfo::TranslationsPath)))
+            app.installTranslator(&qtTranslation);
+        app.installTranslator(&appTranslation);
+    }
     applyGlobalDarkTheme(app);
     QApplication::setOrganizationName("EasyChat");
     QApplication::setApplicationName("EC");
@@ -143,8 +157,9 @@ int main(int argc, char *argv[]) {
             }
         } else {
             bool ok = false;
-            const QString username = QInputDialog::getText(nullptr, "EChat", "Scegli username locale:",
-                                                           QLineEdit::Normal, {}, &ok).trimmed();
+            const QString username = QInputDialog::getText(
+                nullptr, "EChat", QCoreApplication::translate("EChat", "Scegli username locale:"),
+                QLineEdit::Normal, {}, &ok).trimmed();
             if (!ok || username.isEmpty()) return 0;
             identity = crypto.createIdentity(username);
             db.saveIdentity(identity);
@@ -199,7 +214,7 @@ int main(int argc, char *argv[]) {
         transports.stopAll();
         return rc;
     } catch (const std::exception &e) {
-        QMessageBox::critical(nullptr, "EChat", QStringLiteral("Errore fatale: %1").arg(QString::fromUtf8(e.what())));
+        QMessageBox::critical(nullptr, "EChat", QCoreApplication::translate("EChat", "Errore fatale: %1").arg(QString::fromUtf8(e.what())));
         return 1;
     }
 }
