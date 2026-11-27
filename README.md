@@ -11,6 +11,8 @@ EChat ora mantiene **due interfacce sopra lo stesso core**, senza creare due cod
 
 Le due UI condividono esattamente **account, SQLite, cronologia, E2EE, peer, outbox, relay spool e trasporti**. Passare da Light a Full non duplica dati e non crea una seconda identita'. La modalita' scelta viene ricordata al riavvio.
 
+Le interfacce Light e Full caricano la traduzione in cinese semplificato in base alla lingua di sistema.
+
 Avvio forzato da riga di comando:
 
 ```bash
@@ -146,7 +148,7 @@ Private identity keys are still stored in the local SQLite database in this deve
 Without MsQuic the project still builds and uses LAN TCP fallback only.
 
 ```bash
-sudo dnf install -y gcc-c++ cmake qt6-qtbase-devel qt6-qtconnectivity-devel libsodium-devel pkgconf-pkg-config openssl
+sudo dnf install -y gcc-c++ cmake qt6-qtbase-devel qt6-qtconnectivity-devel qt6-qttools-devel libsodium-devel pkgconf-pkg-config openssl
 cmake -S . -B build
 cmake --build build -j
 ./build/EChat
@@ -172,7 +174,7 @@ cmake --build build-test -j
 
 ## Build on Windows
 
-Use Qt 6 for MSVC, CMake and Visual Studio Build Tools. The release workflow downloads the official MsQuic 2.6.1 Schannel package and uses vcpkg for libsodium. MinGW is not supported by the current Windows Bluetooth backend.
+Use Qt 6 for MSVC with Qt Linguist Tools, CMake and Visual Studio Build Tools. The release workflow downloads the official MsQuic 2.6.1 Schannel package and uses vcpkg for libsodium. MinGW is not supported by the current Windows Bluetooth backend.
 
 ## Status
 

@@ -7,7 +7,11 @@ set(CMAKE_AUTOMOC ON)
 set(CMAKE_AUTOUIC ON)
 set(CMAKE_AUTORCC ON)
 
-find_package(Qt6 6.8 REQUIRED COMPONENTS Core Widgets Network Bluetooth Sql)
+find_package(Qt6 6.8 REQUIRED COMPONENTS Core Widgets Network Bluetooth Sql LinguistTools)
+
+if (MSVC)
+    add_compile_options(/utf-8)
+endif()
 
 set(MSQUIC_INCLUDE_DIR "" CACHE PATH "Directory containing msquic.h")
 set(MSQUIC_LIBRARY "" CACHE FILEPATH "Path to the MsQuic library")
@@ -89,6 +93,25 @@ qt_add_executable(EChat
 )
 target_link_libraries(EChat PRIVATE echat_core Qt6::Widgets)
 set_target_properties(EChat PROPERTIES WIN32_EXECUTABLE TRUE)
+qt_add_translations(
+    TARGETS EChat
+    SOURCE_TARGETS EChat echat_core
+    TS_FILES translations/echat_zh_Hans.ts
+    RESOURCE_PREFIX /i18n
+)
+
+cmake_path(ABSOLUTE_PATH QT6_INSTALL_TRANSLATIONS
+    BASE_DIRECTORY "${QT6_INSTALL_PREFIX}"
+    OUTPUT_VARIABLE echat_qt_translations
+)
+set(echat_qt_base_zh_cn "${echat_qt_translations}/qtbase_zh_CN.qm")
+if (EXISTS "${echat_qt_base_zh_cn}")
+    qt_add_resources(EChat echat_qt_translations
+        PREFIX /i18n
+        BASE "${echat_qt_translations}"
+        FILES "${echat_qt_base_zh_cn}"
+    )
+endif()
 
 qt_add_executable(EChatCLI
     src/cli/main_cli.cpp

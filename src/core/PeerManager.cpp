@@ -1,6 +1,7 @@
 #include "core/PeerManager.h"
 #include "core/Protocol.h"
 #include "storage/Database.h"
+#include <QCoreApplication>
 #include <QCryptographicHash>
 
 namespace ec {
@@ -30,7 +31,7 @@ QString PeerManager::fingerprint(const QByteArray &signPk, const QByteArray &kxP
 
 bool PeerManager::mergeIdentity(const QJsonObject &hello, Peer &p) {
     if (!protocol::verifyHello(hello)) {
-        emit securityWarning(QStringLiteral("HELLO EC non valido: firma Ed25519 rifiutata"));
+        emit securityWarning(QCoreApplication::translate("EChat", "HELLO EC non valido: firma Ed25519 rifiutata"));
         return false;
     }
 
@@ -40,7 +41,7 @@ bool PeerManager::mergeIdentity(const QJsonObject &hello, Peer &p) {
     const QByteArray kxPk = QByteArray::fromBase64(hello.value("kxPublicKey").toString().toLatin1());
 
     if (!p.signingPublicKey.isEmpty() && p.signingPublicKey != signPk) {
-        emit securityWarning(QStringLiteral("CHIAVE IDENTITA' CAMBIATA per %1. Identita' rifiutata.")
+        emit securityWarning(QCoreApplication::translate("EChat", "CHIAVE IDENTITA' CAMBIATA per %1. Identita' rifiutata.")
                              .arg(p.username.isEmpty() ? userId : p.username));
         return false;
     }

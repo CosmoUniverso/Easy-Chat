@@ -1,6 +1,7 @@
 #include "transport/lan/LanTransport.h"
 #include "core/Protocol.h"
 
+#include <QCoreApplication>
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QNetworkDatagram>
@@ -17,7 +18,7 @@ LanTransport::LanTransport(QObject *parent)
         }
     });
     connect(&server_, &QTcpServer::acceptError, this, [this](QAbstractSocket::SocketError) {
-        emit statusMessage(QStringLiteral("LAN TCP server: %1").arg(server_.errorString()));
+        emit statusMessage(QCoreApplication::translate("EChat", "LAN TCP server: %1").arg(server_.errorString()));
     });
 
     connect(&discovery_, &QUdpSocket::readyRead, this, &LanTransport::readDiscovery);
@@ -61,7 +62,7 @@ QString LanTransport::linkDescription(const Peer &peer) const {
         return rtt >= 0 ? QStringLiteral("LAN/QUIC · %1 ms").arg(rtt)
                         : QStringLiteral("LAN/QUIC");
     }
-    if (tcpConnected(peer.lanHost)) return QStringLiteral("LAN/TCP fallback");
+    if (tcpConnected(peer.lanHost)) return QCoreApplication::translate("EChat", "LAN/TCP fallback");
     return QStringLiteral("LAN");
 }
 
@@ -79,7 +80,7 @@ void LanTransport::setIdentity(const LocalIdentity &identity) { identity_ = iden
 
 void LanTransport::start() {
     if (!localAvailable()) {
-        emit statusMessage(QStringLiteral("LAN non disponibile"));
+        emit statusMessage(QCoreApplication::translate("EChat", "LAN non disponibile"));
         return;
     }
 
@@ -87,7 +88,7 @@ void LanTransport::start() {
 
     if (!server_.isListening()) {
         if (!server_.listen(QHostAddress::AnyIPv4, TcpPort)) {
-            emit statusMessage(QStringLiteral("Impossibile aprire EChat LAN TCP/%1: %2")
+            emit statusMessage(QCoreApplication::translate("EChat", "Impossibile aprire EChat LAN TCP/%1: %2")
                                .arg(TcpPort).arg(server_.errorString()));
         }
     }
@@ -95,15 +96,15 @@ void LanTransport::start() {
     if (discovery_.state() == QAbstractSocket::UnconnectedState) {
         if (!discovery_.bind(QHostAddress::AnyIPv4, DiscoveryPort,
                              QUdpSocket::ShareAddress | QUdpSocket::ReuseAddressHint)) {
-            emit statusMessage(QStringLiteral("LAN discovery UDP/%1 non disponibile: %2")
+            emit statusMessage(QCoreApplication::translate("EChat", "LAN discovery UDP/%1 non disponibile: %2")
                                .arg(DiscoveryPort).arg(discovery_.errorString()));
         }
     }
 
     announceTimer_.start();
     announce();
-    emit statusMessage(QStringLiteral("EChat LAN: %1 · TCP fallback/%2 · discovery UDP/%3")
-                       .arg(quicStarted_ ? QStringLiteral("QUIC/UDP 45454") : QStringLiteral("QUIC non disponibile"))
+    emit statusMessage(QCoreApplication::translate("EChat", "EChat LAN: %1 · TCP fallback/%2 · discovery UDP/%3")
+                       .arg(quicStarted_ ? QStringLiteral("QUIC/UDP 45454") : QCoreApplication::translate("EChat", "QUIC non disponibile"))
                        .arg(TcpPort).arg(DiscoveryPort));
 }
 
@@ -199,7 +200,7 @@ void LanTransport::attachTcpSocket(QTcpSocket *socket) {
         tcpConnectingHosts_.remove(socket->property("ecTargetHost").toString());
         sendTcpHello(socket);
         emitAggregateConnectionState(host);
-        emit statusMessage(QStringLiteral("LAN TCP fallback connesso: %1").arg(host));
+        emit statusMessage(QCoreApplication::translate("EChat", "LAN TCP fallback connesso: %1").arg(host));
     });
 
     connect(socket, &QIODevice::readyRead, this, [this, socket] {
@@ -216,7 +217,7 @@ void LanTransport::attachTcpSocket(QTcpSocket *socket) {
 
     connect(socket, &QTcpSocket::errorOccurred, this, [this, socket](QAbstractSocket::SocketError) {
         tcpConnectingHosts_.remove(socket->property("ecTargetHost").toString());
-        emit statusMessage(QStringLiteral("LAN TCP: %1").arg(socket->errorString()));
+        emit statusMessage(QCoreApplication::translate("EChat", "LAN TCP: %1").arg(socket->errorString()));
     });
 
     if (socket->state() == QAbstractSocket::ConnectedState) {
@@ -233,7 +234,7 @@ void LanTransport::sendTcpHello(QTcpSocket *socket) {
 void LanTransport::sendQuicHello(const QString &host) {
     if (identity_.userId.isEmpty() || host.isEmpty()) return;
     quic_.send(host, protocol::frame(protocol::hello(identity_)));
-    emit statusMessage(QStringLiteral("LAN QUIC connesso: %1").arg(host));
+    emit statusMessage(QCoreApplication::translate("EChat", "LAN QUIC connesso: %1").arg(host));
 }
 
 QTcpSocket *LanTransport::connectedTcpSocket(const QString &host) const {

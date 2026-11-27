@@ -1,5 +1,6 @@
 #include "transport/lan/QuicEndpoint.h"
 
+#include <QCoreApplication>
 #include <QDir>
 #include <QFile>
 #include <QFileInfo>
@@ -82,7 +83,7 @@ public:
                       {QStringLiteral("-NoProfile"), QStringLiteral("-NonInteractive"),
                        QStringLiteral("-Command"), command});
         if (!process.waitForStarted(5000) || !process.waitForFinished(15000) || process.exitCode() != 0) {
-            setError(QStringLiteral("QUIC: impossibile creare/trovare il certificato Windows"));
+            setError(QCoreApplication::translate("EChat", "QUIC: impossibile creare/trovare il certificato Windows"));
             return false;
         }
         QByteArray hex = process.readAllStandardOutput().trimmed();
@@ -91,7 +92,7 @@ public:
         const QByteArray hashBytes = QByteArray::fromHex(hex);
         QUIC_CERTIFICATE_HASH certHash{};
         if (hashBytes.size() != static_cast<int>(sizeof(certHash.ShaHash))) {
-            setError(QStringLiteral("QUIC: thumbprint certificato Windows non valido"));
+            setError(QCoreApplication::translate("EChat", "QUIC: thumbprint certificato Windows non valido"));
             return false;
         }
         memcpy(certHash.ShaHash, hashBytes.constData(), sizeof(certHash.ShaHash));
@@ -102,7 +103,7 @@ public:
         credential.CertificateHash = &certHash;
         const QUIC_STATUS status = api->ConfigurationLoadCredential(serverConfiguration, &credential);
         if (QUIC_FAILED(status)) {
-            setError(QStringLiteral("QUIC: caricamento certificato Schannel fallito (%1)").arg(status));
+            setError(QCoreApplication::translate("EChat", "QUIC: caricamento certificato Schannel fallito (%1)").arg(status));
             return false;
         }
         return true;
@@ -126,7 +127,7 @@ public:
                            QStringLiteral("-days"), QStringLiteral("3650"), QStringLiteral("-subj"),
                            QStringLiteral("/CN=localhost")});
             if (!process.waitForStarted(5000) || !process.waitForFinished(15000) || process.exitCode() != 0) {
-                setError(QStringLiteral("QUIC: openssl non disponibile per creare il certificato locale"));
+                setError(QCoreApplication::translate("EChat", "QUIC: openssl non disponibile per creare il certificato locale"));
                 return false;
             }
         }
@@ -142,7 +143,7 @@ public:
         credential.CertificateFile = &files;
         const QUIC_STATUS status = api->ConfigurationLoadCredential(serverConfiguration, &credential);
         if (QUIC_FAILED(status)) {
-            setError(QStringLiteral("QUIC: caricamento certificato OpenSSL fallito (%1)").arg(status));
+            setError(QCoreApplication::translate("EChat", "QUIC: caricamento certificato OpenSSL fallito (%1)").arg(status));
             return false;
         }
         return true;
@@ -155,7 +156,7 @@ public:
         if (api) return true;
         QUIC_STATUS status = MsQuicOpen2(&api);
         if (QUIC_FAILED(status) || !api) {
-            setError(QStringLiteral("MsQuicOpen2 fallito (%1)").arg(status));
+            setError(QCoreApplication::translate("EChat", "MsQuicOpen2 fallito (%1)").arg(status));
             api = nullptr;
             return false;
         }
@@ -165,7 +166,7 @@ public:
         };
         status = api->RegistrationOpen(&registrationConfig, &registration);
         if (QUIC_FAILED(status)) {
-            setError(QStringLiteral("QUIC RegistrationOpen fallito (%1)").arg(status));
+            setError(QCoreApplication::translate("EChat", "QUIC RegistrationOpen fallito (%1)").arg(status));
             cleanup();
             return false;
         }
@@ -183,14 +184,14 @@ public:
         status = api->ConfigurationOpen(registration, &alpn, 1, &settings, sizeof(settings),
                                         nullptr, &serverConfiguration);
         if (QUIC_FAILED(status)) {
-            setError(QStringLiteral("QUIC server ConfigurationOpen fallito (%1)").arg(status));
+            setError(QCoreApplication::translate("EChat", "QUIC server ConfigurationOpen fallito (%1)").arg(status));
             cleanup();
             return false;
         }
         status = api->ConfigurationOpen(registration, &alpn, 1, &settings, sizeof(settings),
                                         nullptr, &clientConfiguration);
         if (QUIC_FAILED(status)) {
-            setError(QStringLiteral("QUIC client ConfigurationOpen fallito (%1)").arg(status));
+            setError(QCoreApplication::translate("EChat", "QUIC client ConfigurationOpen fallito (%1)").arg(status));
             cleanup();
             return false;
         }
@@ -210,14 +211,14 @@ public:
             QUIC_CREDENTIAL_FLAG_CLIENT | QUIC_CREDENTIAL_FLAG_NO_CERTIFICATE_VALIDATION);
         status = api->ConfigurationLoadCredential(clientConfiguration, &clientCredential);
         if (QUIC_FAILED(status)) {
-            setError(QStringLiteral("QUIC client credential fallito (%1)").arg(status));
+            setError(QCoreApplication::translate("EChat", "QUIC client credential fallito (%1)").arg(status));
             cleanup();
             return false;
         }
 
         status = api->ListenerOpen(registration, listenerCallback, this, &listener);
         if (QUIC_FAILED(status)) {
-            setError(QStringLiteral("QUIC ListenerOpen fallito (%1)").arg(status));
+            setError(QCoreApplication::translate("EChat", "QUIC ListenerOpen fallito (%1)").arg(status));
             cleanup();
             return false;
         }
@@ -227,7 +228,7 @@ public:
         QuicAddrSetPort(&address, port);
         status = api->ListenerStart(listener, &alpn, 1, &address);
         if (QUIC_FAILED(status)) {
-            setError(QStringLiteral("QUIC ListenerStart UDP/%1 fallito (%2)").arg(port).arg(status));
+            setError(QCoreApplication::translate("EChat", "QUIC ListenerStart UDP/%1 fallito (%2)").arg(port).arg(status));
             cleanup();
             return false;
         }
@@ -307,7 +308,7 @@ public:
             }
             api->ConnectionClose(ctx->handle);
             delete ctx;
-            emit q->statusMessage(QStringLiteral("QUIC connessione a %1 fallita (%2), uso fallback TCP")
+            emit q->statusMessage(QCoreApplication::translate("EChat", "QUIC connessione a %1 fallita (%2), uso fallback TCP")
                                   .arg(host).arg(status));
         }
     }
@@ -415,7 +416,7 @@ public:
             break;
         }
         case QUIC_CONNECTION_EVENT_SHUTDOWN_INITIATED_BY_TRANSPORT:
-            emit self->q->statusMessage(QStringLiteral("QUIC %1: trasporto chiuso (%2), fallback TCP disponibile")
+            emit self->q->statusMessage(QCoreApplication::translate("EChat", "QUIC %1: trasporto chiuso (%2), fallback TCP disponibile")
                                         .arg(ctx->host).arg(event->SHUTDOWN_INITIATED_BY_TRANSPORT.Status));
             break;
         case QUIC_CONNECTION_EVENT_SHUTDOWN_COMPLETE: {
@@ -503,14 +504,14 @@ bool QuicEndpoint::compiledIn() const {
 bool QuicEndpoint::start(quint16 port) {
 #if ECHAT_HAVE_MSQUIC
     if (impl_->initialize(port)) {
-        emit statusMessage(QStringLiteral("EChat QUIC attivo su UDP/%1").arg(port));
+        emit statusMessage(QCoreApplication::translate("EChat", "EChat QUIC attivo su UDP/%1").arg(port));
         return true;
     }
-    emit statusMessage(QStringLiteral("QUIC non disponibile: %1").arg(lastError()));
+    emit statusMessage(QCoreApplication::translate("EChat", "QUIC non disponibile: %1").arg(lastError()));
     return false;
 #else
     Q_UNUSED(port)
-    impl_->setError(QStringLiteral("EChat compilato senza MsQuic"));
+    impl_->setError(QCoreApplication::translate("EChat", "EChat compilato senza MsQuic"));
     return false;
 #endif
 }
